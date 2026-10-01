@@ -108,18 +108,19 @@ def svg_bars(pares, color=None, h=200, w=780, fmt=None, unidad="/m²"):
     if not pares:
         return "<p class='mut'>sin datos</p>"
     mx = max(v for _, v in pares) or 1
+    padl = 190          # hueco para la etiqueta (a la izquierda, en negro)
+    bw = w - padl - 70  # ancho útil para las barras
     out = [f'<svg viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg" style="width:100%">']
     rowh = h / len(pares)
-    bw = w * 0.5
     for i, (lab, v) in enumerate(pares):
         y = i * rowh + rowh * 0.16
         bh = rowh * 0.72
         ww = max(2, v / mx * bw)
         c = color or ("#dc2626" if v >= 8 else "#f59e0b" if v >= 5 else "#16a34a")
-        out.append(f'<rect x="0" y="{y:.1f}" width="{ww:.1f}" height="{bh:.1f}" rx="3" fill="{c}"/>')
-        out.append(f'<text x="6" y="{y+bh*0.72:.1f}" font-size="12" fill="#fff" font-weight="600">{E(lab)}</text>')
+        out.append(f'<text x="{padl-8}" y="{y+bh*0.72:.1f}" font-size="12" fill="#0f172a" text-anchor="end" font-weight="600">{E(lab)}</text>')
+        out.append(f'<rect x="{padl}" y="{y:.1f}" width="{ww:.1f}" height="{bh:.1f}" rx="3" fill="{c}"/>')
         txt = fmt(v) if fmt else (_eur(v) + unidad)
-        out.append(f'<text x="{ww+6:.1f}" y="{y+bh*0.72:.1f}" font-size="12" fill="#334155" font-weight="600">{txt}</text>')
+        out.append(f'<text x="{padl+ww+7:.1f}" y="{y+bh*0.72:.1f}" font-size="12" fill="#0f172a" font-weight="700">{txt}</text>')
     out.append("</svg>")
     return "".join(out)
 
