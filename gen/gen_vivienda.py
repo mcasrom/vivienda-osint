@@ -18,9 +18,10 @@ E = html.escape
 # Registro de medidas (se anotan sobre las series; NO se afirma causalidad).
 MEDIDAS = [
     ("2023-05-25", "Ley 12/2023 por el derecho a la vivienda", "https://www.boe.es/buscar/act.php?id=BOE-A-2023-12203"),
-    ("2026-09-29", "RDL 26/2026 — función social de la vivienda", "https://www.boe.es/"),
-    ("2026-09-29", "RDL 27/2026 — medidas urgentes de vivienda", "https://www.boe.es/"),
+    ("2026-09-29", "RDL 26/2026 — función social de la vivienda", "https://www.boe.es/buscar/act.php?id=BOE-A-2026-20266"),
+    ("2026-09-29", "RDL 27/2026 — medidas urgentes de vivienda", "https://www.boe.es/buscar/act.php?id=BOE-A-2026-20385"),
 ]
+MED_IDS = {"BOE-A-2026-20266", "BOE-A-2026-20385"}
 CALENDARIO = [
     ("16/10/2026", "CGPJ — lanzamientos del 2.º trimestre"),
     ("14/12/2026", "CGPJ — lanzamientos del 3.er trimestre"),
@@ -82,13 +83,25 @@ PROV_INE = {
     "43": "Tarragona", "44": "Teruel", "45": "Toledo", "46": "Valencia", "47": "Valladolid", "48": "Bizkaia",
     "49": "Zamora", "50": "Zaragoza", "51": "Ceuta", "52": "Melilla",
 }
+# Nombres de presentación (los de VIA/INE pueden variar; se normaliza por código).
+PROV_DISP = {"15": "A Coruña", "38": "Santa Cruz de Tenerife"}
+PROV_NAME2CODE = {v.strip().lower(): k for k, v in PROV_INE.items()}
+PROV_NAME2CODE.update({"a coruña": "15", "santa cruz de tenerife": "38", "illes balears": "07",
+                       "la rioja": "26", "valència": "46", "alacant": "03"})
 
 
 def _prov(p, code):
-    p = (p or "").strip()
-    if p:
-        return p
-    return PROV_INE.get((code or "")[:2], "Otras")
+    """Nombre canónico de provincia. Prioriza el código INE; si falta, el nombre."""
+    c = (code or "").strip()
+    if len(c) >= 2 and c[:2] in PROV_INE:
+        return PROV_DISP.get(c[:2], PROV_INE[c[:2]])
+    name = (p or "").strip()
+    if name:
+        k = PROV_NAME2CODE.get(name.lower())
+        if k:
+            return PROV_DISP.get(k, PROV_INE[k])
+        return name
+    return "Otras"
 
 
 def _eur(v):
@@ -108,6 +121,16 @@ def _tendencia(serie):
     if d < -0.05:
         return "bajando", "down"
     return "estable", ""
+
+
+def _etq_var(t):
+    """Tendencia de una VARIACIÓN: no 'baja el precio', sino que la subida se modera."""
+    return {"subiendo": "sube más", "bajando": "se modera", "estable": "estable"}.get(t, "")
+
+
+def _etq_nivel(t):
+    """Tendencia de un NIVEL (conteo): sube/baja el número."""
+    return {"subiendo": "subiendo", "bajando": "bajando", "estable": "estable"}.get(t, "")
 
 
 
@@ -219,7 +242,7 @@ def _propiedad_html(rows, v):
     of = sorted(d.items(), key=lambda x: -x[1])
     total_of = sum(d.values())
     body = f'''<h2>1. Oferta de alquiler <span>· anuncios activos (VIA)</span></h2>
-<div class="panel">{bloque_barras(of, color="#7c3aed", fmt=lambda x: f"{int(x):,}".replace(",", "."), unidad="")}
+<div class="panel">{bloque_barras(of, color="#7c3aed", fmt=lambda x: f"{int(x):,}".replace(",", "."), unidad="", grupo="provincias")}
 <p class="mut" style="font-size:.8rem">Nº de <b>anuncios de alquiler activos</b> por provincia. Total: <b>{f"{total_of:,}".replace(",", ".")}</b> anuncios. Fuente: <b>VIA</b> (anuncios de portales; <b>indicativo</b>, no serie oficial). Datos a {E(str(v["fecha"]))}.</p></div>
 <h2>2. Concentración de la propiedad (propietarios por nº de viviendas)</h2>
 <div class="panel">
@@ -249,7 +272,7 @@ def _propiedad_html(rows, v):
 
 
 
-def bloque_barras(pares, color, fmt=None, unidad="", top=10):
+def bloque_barras(pares, color, fmt=None, unidad="", top=10, grupo="grupos"):
     """Top-N barras + desplegable con la lista completa (no se pierde detalle)."""
     if not pares:
         return "<p class='mut'>sin datos</p>"
@@ -259,7 +282,7 @@ def bloque_barras(pares, color, fmt=None, unidad="", top=10):
         filas = "".join(
             f'<tr><td>{E(k)}</td><td class="num">{fmt(v) if fmt else _eur(v)}</td></tr>' for k, v in pares)
         det = ('<details style="margin-top:10px"><summary style="cursor:pointer;font-weight:600;font-size:.82rem;color:var(--ink)">'
-               f'Ver las {len(pares)} comunidades</summary><table style="margin-top:8px"><tbody>{filas}</tbody></table></details>')
+               f'Ver el detalle completo · {len(pares)} {E(grupo)}</summary><table style="margin-top:8px"><tbody>{filas}</tbody></table></details>')
         grafico += det
     return grafico
 
@@ -326,8 +349,12 @@ def svg_bars(pares, color=None, h=200, w=780, fmt=None, unidad="/m²"):
     return "".join(out)
 
 
+def _eurp(v):
+    return f"{v:,.1f} €".replace(",", "\u00a0").replace(".", ",") if v is not None else "—"
+
+
 def heatmap_provincias(rows, w=780):
-    """Rejilla de provincias coloreada por mediana €/m²."""
+    """Rejilla de provincias coloreada por mediana €/m² (escala de un solo tono)."""
     prov = defaultdict(list)
     for m, p, e, a, s, c in rows:
         if e:
@@ -338,19 +365,20 @@ def heatmap_provincias(rows, w=780):
     mx = max(v for _, v in dat) or 1
     mn = min(v for _, v in dat)
     cols = 6
-    cell = 118
     rowh = 46
     rh = ((len(dat) + cols - 1) // cols) * rowh + 8
     out = [f'<svg viewBox="0 0 {w} {rh}" xmlns="http://www.w3.org/2000/svg" style="width:100%">']
     for i, (p, v) in enumerate(dat):
         r, cc = divmod(i, cols)
         t = (v - mn) / ((mx - mn) or 1)
-        R = int(22 + t * (220 - 22)); G = int(163 - t * (163 - 38)); B = int(74 - t * (74 - 38))
+        # escala secuencial de un solo tono (teal claro -> teal oscuro); sin lectura bueno/malo
+        R = int(204 + t * (15 - 204)); G = int(251 + t * (118 - 251)); B = int(241 + t * (110 - 241))
         x = cc * (w / cols); y = r * rowh
         out.append(f'<rect x="{x+2:.0f}" y="{y+2:.0f}" width="{w/cols-4:.0f}" height="{rowh-4}" rx="5" fill="rgb({R},{G},{B})"/>')
+        fg = "#0f172a" if t < 0.55 else "#ffffff"
         lbl = E(p if len(p) <= 16 else p[:15] + "…")
-        out.append(f'<text x="{x+8:.0f}" y="{y+rowh*0.55:.0f}" font-size="10.5" fill="#fff" font-weight="600">{lbl}</text>')
-        out.append(f'<text x="{x+8:.0f}" y="{y+rowh*0.85:.0f}" font-size="9.5" fill="#ffffffcc">{_eur(v)}/m²</text>')
+        out.append(f'<text x="{x+8:.0f}" y="{y+rowh*0.55:.0f}" font-size="10.5" fill="{fg}" font-weight="600">{lbl}</text>')
+        out.append(f'<text x="{x+8:.0f}" y="{y+rowh*0.85:.0f}" font-size="9.5" fill="{fg}" opacity="0.85">{_eurp(v)}/m²</text>')
     out.append("</svg>")
     return "".join(out)
 
@@ -378,7 +406,16 @@ def build():
     ipva_s = ine.serie("ipva_var_anual")
     ipva_var = ipva_s[-1][1] if ipva_s else None
     tend_ia, _ = _tendencia(ipva_s)
-    ind_now = {"ipv": ipv_ult, "ipva": ipva_var, "med": v["mediana"], "lz": lz_total, "eh": eh_total, "vut": vut_total}
+    tend_lz, _ = _tendencia(lz_serie)
+    tend_eh, _ = _tendencia(eh_nac)
+    per_ipv = ipv[-1][0] if ipv else "—"
+    per_ipva = ipva_s[-1][0] if ipva_s else "—"
+    per_lz = lz_per or "—"
+    per_eh = str(eh_anyo) if eh_anyo else "—"
+    per_med = v["fecha"] or "—"
+    per_vut = str(vut_anyo) if vut_anyo else "—"
+    ind_now = {"ipv": (ipv_ult, per_ipv), "ipva": (ipva_var, per_ipva), "med": (v["mediana"], per_med),
+               "lz": (lz_total, per_lz), "eh": (eh_total, per_eh), "vut": (vut_total, per_vut)}
     b0 = congelar_baseline(ind_now).get("ind", {})
     _IND = [("ipv", "pct", "Precio compraventa (IPV, var. anual)", "INE"),
             ("ipva", "pct", "Alquiler — índice (IPVA, var. anual)", "INE"),
@@ -386,22 +423,39 @@ def build():
             ("lz", "int", "Lanzamientos (desahucios)", "CGPJ"),
             ("eh", "int", "Ejecuciones hipotecarias", "INE"),
             ("vut", "int", "Viviendas turísticas (VUT)", "INE")]
+
+    def _vp(d):
+        if not d:
+            return None, None
+        if isinstance(d, dict):
+            return d.get("v"), d.get("p")
+        return (d[0], d[1] if len(d) > 1 else None)
+
+    def _celda(d, tp):
+        val, per = _vp(d)
+        if val is None:
+            return "—"
+        return f'{_fmtv(tp, val)} <span class="mut">· {E(str(per or "—"))}</span>'
+
     filas_control = "".join(
-        f'<tr><td>{tt}</td><td class="num">{_fmtv(tp, b0.get(k))}</td><td class="num"><b>{_fmtv(tp, ind_now.get(k))}</b></td><td class="num">{_dlt(tp, b0.get(k), ind_now.get(k))}</td><td class="mut">{src}</td></tr>'
+        f'<tr><td>{tt}</td><td class="num">{_celda(b0.get(k), tp)}</td>'
+        f'<td class="num"><b>{_celda(ind_now.get(k), tp)}</b></td>'
+        f'<td class="num">{_dlt(tp, _vp(b0.get(k))[0], _vp(ind_now.get(k))[0])}</td>'
+        f'<td class="mut">{src}</td></tr>'
         for k, tp, tt, src in _IND)
     ipva = ine.serie("ipva_indice")
 
     tend, _ = _tendencia(ipv)
     inds = "".join([
-        _ind(_pct(ipv_ult), "", tend, {"subiendo": "Subiendo", "bajando": "Bajando", "estable": "Estable"}[tend],
-             "INE · IPV (compraventa)", "variación anual" + (f" · nueva {_pct(nueva)}, 2.ª mano {_pct(seg)}" if nueva and seg else "")),
-        _ind(_pct(ipva_var), "", tend_ia, {"subiendo": "Subiendo", "bajando": "Bajando", "estable": "Estable"}[tend_ia],
-             "INE · IPVA (alquiler)", "variación anual"),
-        _ind((f"{int(lz_total):,}".replace(",", ".") if lz_total else "—"), "", "estable",
-             (lz_per or "—"), "CGPJ · lanzamientos (desahucios)", "trimestral"),
-        _ind((f"{int(eh_total):,}".replace(",", ".") if eh_total else "—"), "", "estable",
-             (str(eh_anyo) if eh_anyo else "—"), "INE · ejecuciones hipotecarias", "anual"),
-        _ind(_eur(v["mediana"]) + "<small>/m²</small>", "", "estable", "Actual", "VIA · alquiler mediano", "anual"),
+        _ind(_pct(ipv_ult), "", tend, _etq_var(tend), "INE · IPV (compraventa)",
+             "variación anual · " + per_ipv + (f" · nueva {_pct(nueva)}, 2.ª mano {_pct(seg)}" if nueva and seg else "")),
+        _ind(_pct(ipva_var), "", tend_ia, _etq_var(tend_ia), "INE · IPVA (alquiler)",
+             "variación anual · " + per_ipva),
+        _ind((f"{int(lz_total):,}".replace(",", ".") if lz_total else "—"), "", tend_lz, _etq_nivel(tend_lz),
+             "CGPJ · lanzamientos (desahucios)", per_lz),
+        _ind((f"{int(eh_total):,}".replace(",", ".") if eh_total else "—"), "", tend_eh, _etq_nivel(tend_eh),
+             "INE · ejecuciones hipotecarias", per_eh),
+        _ind(_eur(v["mediana"]), "/m²", "", "indicativo · anuncios activos", "VIA · alquiler mediano", per_med),
     ])
 
     eh_bars = "".join(
@@ -419,23 +473,32 @@ def build():
     for p in reg_provs:
         if prov[p]:
             reg_med = sorted(prov[p])[len(prov[p]) // 2]
+    reg_lz = None
+    reg_lz_nom = ""
+    for k, val in lz:
+        if k.upper().startswith(region.upper()):
+            reg_lz, reg_lz_nom = val, k
+            break
     comp_rows = "".join(
         f'<tr><td>Alquiler €/m² (anuncios)</td><td>{E(str(v["fecha"]))}</td><td class="num">{_eur(esp_med)}</td><td class="num">{_eur(reg_med) if reg_med else "sin dato"}</td></tr>'
-        f'<tr><td>Compraventa (IPV, var. anual)</td><td>trimestral</td><td class="num">{_pct(ipv_ult)}</td><td class="num mut">pendiente CCAA</td></tr>'
-        f'<tr><td>Lanzamientos judiciales</td><td>2T 2026</td><td class="num mut">—</td><td class="num mut">16/10/2026</td></tr>')
+        f'<tr><td>Compraventa (IPV, var. anual)</td><td>{E(per_ipv)}</td><td class="num">{_pct(ipv_ult)}</td><td class="num mut">no ingestado por CCAA</td></tr>'
+        f'<tr><td>Lanzamientos judiciales</td><td>{E(per_lz)}</td><td class="num">{_fmtv("int", lz_total)}</td><td class="num">{_fmtv("int", reg_lz) if reg_lz is not None else "sin dato"}</td></tr>')
 
     filas_med = "".join(
         f'<div class="m"><span class="d">{E(d)}</span> <b>{E(t)}</b> '
         + (f'<a class="src" href="{E(u)}" target="_blank" rel="noopener">fuente ↗</a>' if u else "")
         + "</div>" for d, t, u in MEDIDAS)
     cal = "".join(f'<div class="m"><span class="d">{E(d)}</span> {E(t)}</div>' for d, t in CALENDARIO)
-    # medidas nuevas del BOE
+    # disposiciones del BOE (sección I) — se excluyen las ya listadas en MEDIDAS
     c = sqlite3.connect(boeing.DB)
-    boe_rows = c.execute("SELECT fecha, titulo, url FROM boe ORDER BY fecha DESC LIMIT 8").fetchall()
+    boe_all = c.execute("SELECT fecha, titulo, url, departamento, ambito FROM boe ORDER BY fecha DESC").fetchall()
+    boe_rows = [(f, t, u, dep, amb) for f, t, u, dep, amb in boe_all
+                if not any(i in (u or "") for i in MED_IDS)][:8]
     boe_html = "".join(
-        f'<div class="card"><div class="fecha">{E(f)}</div><div class="tit">{E(t)}</div>'
+        f'<div class="card"><div class="fecha">{E(f)} · {E((dep or "").title() or "BOE")}'
+        + (f' · {E(amb)}' if amb else "") + f'</div><div class="tit">{E(t)}</div>'
         + (f'<a class="src" href="{E(u)}" target="_blank" rel="noopener">BOE ↗</a>' if u else "")
-        + "</div>" for f, t, u in boe_rows)
+        + "</div>" for f, t, u, dep, amb in boe_rows)
 
     doc = f"""<!doctype html><html lang="es"><head><meta charset="utf-8">
 <meta name="google-site-verification" content="mlyuKtDMOhZ2x2lMrqr-MHT9LeUW8i6uEJw1Sv6AzNY">
@@ -500,11 +563,11 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 <div class="panel">{svg_line(ipv)}<p class="mut" style="font-size:.8rem">Índice de Precios de Vivienda (IPV), total nacional, variación anual (%). Fuente: <a href="https://www.ine.es/">INE</a>. Las medidas del BOE se registran abajo.</p></div>
 
 <h2 id="mapa">Mapa de calor: precio del alquiler por provincia <span>· €/m²</span></h2>
-<div class="panel">{heatmap_provincias(rows)}<p class="mut" style="font-size:.8rem">Mediana de anuncios activos por provincia (Índice VIA). Verde = más barato · rojo = más caro.{" Datos a " + E(str(v["fecha"])) + "." if v["fecha"] else ""} <a href="https://municipal.viajeinteligencia.com/alquiler.html">Detalle por municipio ↗</a></p></div>
+<div class="panel">{heatmap_provincias(rows)}<p class="mut" style="font-size:.8rem">Mediana de los municipios con datos VIA de cada provincia (anuncios activos; no es un promedio provincial oficial). <b>Más claro = menos €/m² · más oscuro = más €/m²</b> (misma escala, sin juicio de valor).{" Datos a " + E(str(v["fecha"])) + "." if v["fecha"] else ""} <a href="https://municipal.viajeinteligencia.com/alquiler.html">Detalle por municipio ↗</a></p></div>
 
 <h2>Ejecuciones hipotecarias de vivienda por CCAA <span>· INE{f" · {eh_anyo}" if eh_anyo else ""}</span></h2>
 <div class="panel">
-{bloque_barras(eh, color="#0f766e", fmt=lambda v: f"{int(v):,}".replace(",", "."), unidad="")}
+{bloque_barras(eh, color="#0f766e", fmt=lambda v: f"{int(v):,}".replace(",", "."), unidad="", grupo="comunidades autónomas")}
 <p style="font-size:.85rem;margin:18px 0 2px"><b>Cronología nacional</b> · viviendas con ejecución iniciada, por año</p>
 {svg_line([(str(a), v) for a, v in eh_nac], color="#0f766e", fmt=lambda v: f"{int(v):,}".replace(",", "."))}
 <p class="mut" style="font-size:.8rem">Ejecuciones hipotecarias <b>iniciadas sobre vivienda</b>, por CCAA. <b>Total nacional {eh_tot_txt}</b>. Fuente: <a href="https://www.ine.es/">INE</a>.</p>
@@ -512,21 +575,21 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 
 <h2>Lanzamientos (desahucios) por CCAA <span>· CGPJ{f" · {lz_per}" if lz_per else ""}</span></h2>
 <div class="panel">
-{bloque_barras(lz, color="#c2410c", fmt=lambda v: f"{int(v):,}".replace(",", "."), unidad="")}
+{bloque_barras(lz, color="#c2410c", fmt=lambda v: f"{int(v):,}".replace(",", "."), unidad="", grupo="comunidades autónomas")}
 <p style="font-size:.85rem;margin:18px 0 2px"><b>Cronología nacional</b> · lanzamientos por trimestre</p>
 {svg_line([(str(a), v) for a, v in lz_serie], color="#c2410c", fmt=lambda v: f"{int(v):,}".replace(",", "."))}
 <p class="mut" style="font-size:.8rem">Lanzamientos <b>practicados</b> (desalojo), por CCAA. Total {lz_per}: <b>{lz_tot_txt}</b>. Fuente: <a href="https://www.poderjudicial.es/">CGPJ</a> (trimestral).</p></div>
 
 <h2>Viviendas turísticas por CCAA <span>· INE{f" · {vut_anyo}" if vut_anyo else ""}</span></h2>
 <div class="panel">
-{bloque_barras(vut, color="#7c3aed", fmt=lambda v: f"{int(v):,}".replace(",", "."), unidad="")}
-<p class="mut" style="font-size:.8rem">Viviendas de uso turístico (VUT). Total nacional: <b>{vut_tot_txt}</b>{" · " + f"{vut_pct:.2f} %" if vut_pct else ""} del total de viviendas censadas. Fuente: <a href="https://www.ine.es/">INE</a> (Estadística de Viviendas Turísticas).</p></div>
+{bloque_barras(vut, color="#7c3aed", fmt=lambda v: f"{int(v):,}".replace(",", "."), unidad="", grupo="comunidades autónomas")}
+<p class="mut" style="font-size:.8rem">Viviendas de uso turístico (VUT) por <b>comunidad autónoma</b>, {E(str(vut_anyo))}. Total nacional: <b>{vut_tot_txt}</b>{" · " + f"{vut_pct:.2f}".replace(".", ",") + f" % ({E(str(vut_anyo))})" if vut_pct else ""} del total de viviendas censadas. Fuente: <a href="https://www.ine.es/">INE</a> (Estadística de Viviendas Turísticas).</p></div>
 
 <h2 id="control">Punto de control · decretos de sep–oct 2026</h2>
 <div class="panel">
-<p style="margin:0 0 12px"><b>t0 = 29-sep-2026</b> (RDL 26/2026 «función social de la vivienda» y RDL 27/2026; + octubre 2026). Se marca como <b>punto de control</b> para observar la evolución <b>a partir de ahí</b>: precios (IPV/IPVA), desahucios (CGPJ), ejecuciones (INE), viviendas turísticas (VUT) y oferta/demanda.</p>
-<table><thead><tr><th>Indicador</th><th class="num">t0 · 29-sep-2026</th><th class="num">Actual</th><th class="num">Δ</th><th>Fuente</th></tr></thead><tbody>{filas_control}</tbody></table>
-<p class="mut" style="font-size:.8rem">Próximos hitos: <b>CGPJ 2T-2026 → 16-oct-2026</b>; INE IPV/IPVA trimestral; VTE anual. Cada dato nuevo se comparará con este baseline.</p></div>
+<p style="margin:0 0 12px">Los RDL 26/2026 y 27/2026 se publicaron el <b>29-sep-2026</b>. La <b>referencia</b> es el último dato disponible de cada serie <b>en su propio periodo</b> (no una fecha de corte): precios (IPV/IPVA), lanzamientos (CGPJ), ejecuciones (INE), viviendas turísticas (VUT) y alquiler (VIA).</p>
+<table><thead><tr><th>Indicador</th><th class="num">Referencia · valor · periodo</th><th class="num">Último dato · valor · periodo</th><th class="num">Δ</th><th>Fuente</th></tr></thead><tbody>{filas_control}</tbody></table>
+<p class="mut" style="font-size:.8rem">⚠️ <b>Ninguna serie publicada mide todavía el periodo posterior a los decretos.</b> Los hitos de <b>16-oct-2026 (CGPJ 2T) y 14-dic-2026 (CGPJ 3T)</b> describen periodos <b>anteriores</b> a los RDL; la primera lectura posterior (4T-2026) llegará en <b>~feb-2027</b>. Cada dato nuevo se compara con esta referencia.</p></div>
 
 <h2 id="comparador">{E(region)} frente a España</h2>
 <div class="panel"><table><thead><tr><th>Indicador</th><th>Periodo</th><th class="num">España</th><th class="num">{E(region)}</th></tr></thead><tbody>{comp_rows}</tbody></table></div>

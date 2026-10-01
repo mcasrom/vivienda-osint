@@ -115,10 +115,24 @@ def ingest_vte() -> int:
             n += c.execute("INSERT OR REPLACE INTO ine_serie VALUES(?,?,?,?)",
                            ("vte:" + ambito, str(x.get("Anyo")), ambito, float(x["Valor"]))).rowcount
         elif nom.startswith("Total Nacional. Porcentaje de viviendas turísticas"):
-            c.execute("INSERT OR REPLACE INTO ine_serie VALUES(?,?,?,?)",
-                      ("vte_pct", str(x.get("Anyo")), "pct", float(x["Valor"])))
+            for y in data:
+                if y.get("Valor") is None:
+                    continue
+                c.execute("INSERT OR REPLACE INTO ine_serie VALUES(?,?,?,?)",
+                          ("vte_pct", str(y.get("Anyo")), "pct", float(y["Valor"])))
     c.commit()
     return n
+
+
+# Nombres oficiales INE de las 19 comunidades/ciudades autónomas. La tabla 46141
+# mezcla CCAA y provincias con la misma forma de nombre, así que se filtra por lista.
+CCAA = {
+    "andalucía", "aragón", "asturias, principado de", "balears, illes", "canarias",
+    "cantabria", "castilla y león", "castilla - la mancha", "cataluña", "ceuta",
+    "comunitat valenciana", "extremadura", "galicia", "madrid, comunidad de",
+    "melilla", "murcia, región de", "navarra, comunidad foral de", "país vasco",
+    "rioja, la",
+}
 
 
 def vte_ccaa():
@@ -126,8 +140,9 @@ def vte_ccaa():
     anyo = c.execute("SELECT MAX(fecha) FROM ine_serie WHERE serie LIKE 'vte:%'").fetchone()[0]
     rows = c.execute("SELECT etiqueta, valor FROM ine_serie WHERE serie LIKE 'vte:%' AND fecha=? "
                      "AND etiqueta<>'Total Nacional' ORDER BY valor DESC", (anyo,)).fetchall()
+    rows = [(e, v) for e, v in rows if e.strip().lower() in CCAA]
     tot = c.execute("SELECT valor FROM ine_serie WHERE serie='vte:Total Nacional' AND fecha=?", (anyo,)).fetchone()
-    pct = c.execute("SELECT valor FROM ine_serie WHERE serie='vte_pct'").fetchone()
+    pct = c.execute("SELECT valor FROM ine_serie WHERE serie='vte_pct' AND fecha=?", (anyo,)).fetchone()
     return rows, anyo, (tot[0] if tot else None), (pct[0] if pct else None)
 
 
