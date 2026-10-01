@@ -4,7 +4,7 @@ Estructura: Indicadores · IPV · Alquiler · Mapa de calor provincial · Compar
 Calendario · Registro de medidas · Método y límites. Sin puntuaciones compuestas.
 """
 from __future__ import annotations
-import os, sys, sqlite3, html, json
+import os, sys, sqlite3, html, json, json
 from datetime import date
 from collections import defaultdict
 
@@ -26,6 +26,49 @@ CALENDARIO = [
     ("14/12/2026", "CGPJ — lanzamientos del 3.er trimestre"),
     ("Cada mes", "INE — compraventas inscritas e IRAV (el de agosto, 15/09)"),
 ]
+
+
+
+BASE_JSON = os.path.join(ROOT, "data", "baseline_t0.json")
+
+
+def congelar_baseline(ind):
+    """Congela el snapshot t0 (una vez) y lo devuelve."""
+    if os.path.exists(BASE_JSON):
+        try:
+            return json.load(open(BASE_JSON, encoding="utf-8"))
+        except Exception:
+            pass
+    snap = {"fecha_t0": "2026-09-29", "creado": str(date.today()), "ind": ind}
+    try:
+        json.dump(snap, open(BASE_JSON, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    except Exception:
+        pass
+    return snap
+
+
+def _fmtv(tipo, v):
+    if v is None:
+        return "—"
+    if tipo == "pct":
+        return _pct(v)
+    if tipo == "eur":
+        return _eur(v)
+    return f"{int(v):,}".replace(",", ".")
+
+
+def _dlt(tipo, a, b):
+    if a is None or b is None:
+        return ""
+    d = b - a
+    if abs(d) < 1e-9:
+        return "="
+    s = "+" if d >= 0 else ""
+    if tipo == "pct":
+        return f"{s}{d:.1f} pp"
+    if tipo == "eur":
+        return f"{s}{d:.0f} €"
+    return f"{s}{d:,.0f}".replace(",", ".")
 
 
 PROV_INE = {
@@ -174,12 +217,23 @@ def build():
     eh_tot_txt = f"{int(eh_total):,}".replace(",", ".") if eh_total else "—"
     vut, vut_anyo, vut_total, vut_pct = ine.vte_ccaa()
     vut_tot_txt = f"{int(vut_total):,}".replace(",", ".") if vut_total else "—"
-    ipva = ine.serie("ipva_indice")
-
-    tend, _ = _tendencia(ipv)
     ipva_s = ine.serie("ipva_var_anual")
     ipva_var = ipva_s[-1][1] if ipva_s else None
     tend_ia, _ = _tendencia(ipva_s)
+    ind_now = {"ipv": ipv_ult, "ipva": ipva_var, "med": v["mediana"], "lz": lz_total, "eh": eh_total, "vut": vut_total}
+    b0 = congelar_baseline(ind_now).get("ind", {})
+    _IND = [("ipv", "pct", "Precio compraventa (IPV, var. anual)", "INE"),
+            ("ipva", "pct", "Alquiler — índice (IPVA, var. anual)", "INE"),
+            ("med", "eur", "Alquiler mediano (€/m²)", "VIA"),
+            ("lz", "int", "Lanzamientos (desahucios)", "CGPJ"),
+            ("eh", "int", "Ejecuciones hipotecarias", "INE"),
+            ("vut", "int", "Viviendas turísticas (VUT)", "INE")]
+    filas_control = "".join(
+        f'<tr><td>{tt}</td><td class="num">{_fmtv(tp, b0.get(k))}</td><td class="num"><b>{_fmtv(tp, ind_now.get(k))}</b></td><td class="num">{_dlt(tp, b0.get(k), ind_now.get(k))}</td><td class="mut">{src}</td></tr>'
+        for k, tp, tt, src in _IND)
+    ipva = ine.serie("ipva_indice")
+
+    tend, _ = _tendencia(ipv)
     inds = "".join([
         _ind(_pct(ipv_ult), "", tend, {"subiendo": "Subiendo", "bajando": "Bajando", "estable": "Estable"}[tend],
              "INE · IPV (compraventa)", "variación anual" + (f" · nueva {_pct(nueva)}, 2.ª mano {_pct(seg)}" if nueva and seg else "")),
@@ -312,14 +366,7 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 <h2 id="control">Punto de control · decretos de sep–oct 2026</h2>
 <div class="panel">
 <p style="margin:0 0 12px"><b>t0 = 29-sep-2026</b> (RDL 26/2026 «función social de la vivienda» y RDL 27/2026; + octubre 2026). Se marca como <b>punto de control</b> para observar la evolución <b>a partir de ahí</b>: precios (IPV/IPVA), desahucios (CGPJ), ejecuciones (INE), viviendas turísticas (VUT) y oferta/demanda.</p>
-<table><thead><tr><th>Indicador</th><th class="num">Baseline en t0</th><th>Fuente</th></tr></thead><tbody>
-<tr><td>Precio compraventa (IPV, var. anual)</td><td class="num">{_pct(ipv_ult)}</td><td>INE</td></tr>
-<tr><td>Alquiler — índice (IPVA, var. anual)</td><td class="num">{_pct(ipva_var)}</td><td>INE</td></tr>
-<tr><td>Alquiler mediano (€/m²)</td><td class="num">{_eur(v["mediana"])}</td><td>VIA</td></tr>
-<tr><td>Lanzamientos (desahucios)</td><td class="num">{lz_tot_txt} ({lz_per})</td><td>CGPJ</td></tr>
-<tr><td>Ejecuciones hipotecarias</td><td class="num">{eh_tot_txt} ({eh_anyo})</td><td>INE</td></tr>
-<tr><td>Viviendas turísticas</td><td class="num">{vut_tot_txt} ({vut_anyo})</td><td>INE</td></tr>
-</tbody></table>
+<table><thead><tr><th>Indicador</th><th class="num">t0 · 29-sep-2026</th><th class="num">Actual</th><th class="num">Δ</th><th>Fuente</th></tr></thead><tbody>{filas_control}</tbody></table>
 <p class="mut" style="font-size:.8rem">Próximos hitos: <b>CGPJ 2T-2026 → 16-oct-2026</b>; INE IPV/IPVA trimestral; VTE anual. Cada dato nuevo se comparará con este baseline.</p></div>
 
 <h2 id="comparador">{E(region)} frente a España</h2>
