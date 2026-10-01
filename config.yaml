@@ -1,0 +1,8 @@
+# Microservicio Vivienda (pruebapublica.com) — config
+sitio: vivienda.pruebapublica.com
+root_web: /home/deploy/vivienda-osint/web
+ventana_boe_dias: 21            # días de sumario BOE a revisar
+# Fuentes (solo lectura; compartidas por datos, no ejecución)
+via_db: /home/deploy/municipal-intel/dashboard/data/via/via.db
+# Encaje
+encuadre: civico_neutral        # NO FIMI, NO coordinacion
