@@ -28,6 +28,26 @@ CALENDARIO = [
 ]
 
 
+PROV_INE = {
+    "01": "Álava", "02": "Albacete", "03": "Alicante", "04": "Almería", "05": "Ávila", "06": "Badajoz",
+    "07": "Baleares", "08": "Barcelona", "09": "Burgos", "10": "Cáceres", "11": "Cádiz", "12": "Castellón",
+    "13": "Ciudad Real", "14": "Córdoba", "15": "Coruña", "16": "Cuenca", "17": "Girona", "18": "Granada",
+    "19": "Guadalajara", "20": "Gipuzkoa", "21": "Huelva", "22": "Huesca", "23": "Jaén", "24": "León",
+    "25": "Lleida", "26": "La Rioja", "27": "Lugo", "28": "Madrid", "29": "Málaga", "30": "Murcia",
+    "31": "Navarra", "32": "Ourense", "33": "Asturias", "34": "Palencia", "35": "Las Palmas", "36": "Pontevedra",
+    "37": "Salamanca", "38": "S.C. Tenerife", "39": "Cantabria", "40": "Segovia", "41": "Sevilla", "42": "Soria",
+    "43": "Tarragona", "44": "Teruel", "45": "Toledo", "46": "Valencia", "47": "Valladolid", "48": "Bizkaia",
+    "49": "Zamora", "50": "Zaragoza", "51": "Ceuta", "52": "Melilla",
+}
+
+
+def _prov(p, code):
+    p = (p or "").strip()
+    if p:
+        return p
+    return PROV_INE.get((code or "")[:2], "Otras")
+
+
 def _eur(v):
     return f"{v:,.0f} €".replace(",", ".") if v is not None else "—"
 
@@ -107,7 +127,7 @@ def heatmap_provincias(rows, w=780):
     prov = defaultdict(list)
     for m, p, e, a, s, c in rows:
         if e:
-            prov[p].append(e)
+            prov[_prov(p, c)].append(e)
     dat = sorted(((p, sorted(v)[len(v) // 2]) for p, v in prov.items()), key=lambda x: -x[1])
     if not dat:
         return "<p class='mut'>sin datos</p>"
@@ -173,7 +193,7 @@ def build():
     prov = defaultdict(list)
     for m, p, e, a, s, c in rows:
         if e:
-            prov[p].append(e)
+            prov[_prov(p, c)].append(e)
     esp_med = v["mediana"]
     reg_provs = sorted([p for p in prov if region.lower() in p.lower()]) or [region]
     reg_med = None
