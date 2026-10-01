@@ -438,6 +438,7 @@ def build():
         + "</div>" for f, t, u in boe_rows)
 
     doc = f"""<!doctype html><html lang="es"><head><meta charset="utf-8">
+<meta name="google-site-verification" content="mlyuKtDMOhZ2x2lMrqr-MHT9LeUW8i6uEJw1Sv6AzNY">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Observatorio de la vivienda — datos oficiales</title>
 <meta name="description" content="Qué dicen los datos oficiales de vivienda (INE, CGPJ, MIVAU, BOE), sin puntuaciones ni atribuciones. Precio, alquiler, compraventas, lanzamientos y medidas. Mapa de calor y comparador.">
