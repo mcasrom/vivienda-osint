@@ -201,8 +201,26 @@ def build():
 <link rel="canonical" href="https://vivienda.pruebapublica.com/">
 <meta property="og:title" content="Observatorio de la vivienda">
 <meta property="og:description" content="Datos oficiales de vivienda con fuente y fecha. Sin puntuaciones ni atribuciones.">
-<meta property="og:type" content="website"><meta property="og:image" content="https://vivienda.pruebapublica.com/og.png">
+<meta name="robots" content="index, follow">
+<meta name="theme-color" content="#0f766e">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://vivienda.pruebapublica.com/">
+<meta property="og:site_name" content="Observatorio de la vivienda">
+<meta property="og:locale" content="es_ES">
+<meta property="og:image" content="https://vivienda.pruebapublica.com/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Observatorio de la vivienda">
+<meta name="twitter:description" content="Precio del alquiler por municipio, evolución (INE), decretos (BOE) y desahucios (CGPJ) por CCAA.">
+<meta name="twitter:image" content="https://vivienda.pruebapublica.com/og.png">
+<script type="application/ld+json">
+{{"@context":"https://schema.org","@type":"Dataset","name":"Observatorio de la vivienda",
+"description":"Datos oficiales de vivienda en España: precio del alquiler por municipio (VIA), evolución de precios (INE), ejecuciones hipotecarias y lanzamientos por CCAA (INE/CGPJ), y registro de medidas (BOE).",
+"url":"https://vivienda.pruebapublica.com/","creator":{{"@type":"Organization","name":"pruebapublica.com"}},
+"license":"https://creativecommons.org/licenses/by/4.0/","isAccessibleForFree":true,
+"keywords":["vivienda","alquiler","desahucios","lanzamientos","INE","CGPJ","BOE","España"]}}
+</script>
 <style>
 :root{{--ink:#0f172a;--mut:#64748b;--accent:#0f766e;--line:#e2e8f0;--bg:#f8fafc;--card:#fff}}
 *{{box-sizing:border-box}} body{{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.6}}
