@@ -142,7 +142,7 @@ def build():
     nueva = ine.ultimo("ipv_nueva_var")
     seg = ine.ultimo("ipv_segunda_var")
     eh, eh_anyo, eh_total = ine.eh_ccaa()
-    eh_nac = ine.serie("eh:Total Nacional")
+    eh_nac = ine.eh_nacional()
     eh_crono = " · ".join(f"{a} <b>{int(v):,}</b>".replace(",", ".") for a, v in eh_nac)
     ipva = ine.serie("ipva_indice")
 

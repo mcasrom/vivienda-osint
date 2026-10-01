@@ -97,6 +97,15 @@ def eh_ccaa(anyo=None):
     return rows, anyo, (total[0] if total else None)
 
 
+def eh_nacional():
+    """[(año, valor)] de la serie nacional de ejecuciones hipotecarias."""
+    try:
+        c = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
+        return c.execute("SELECT fecha, valor FROM ine_serie WHERE serie='eh:Total Nacional' ORDER BY fecha").fetchall()
+    except Exception:
+        return []
+
+
 def serie(nombre: str):
     try:
         c = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
