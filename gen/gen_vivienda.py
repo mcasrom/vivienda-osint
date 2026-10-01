@@ -498,7 +498,7 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 <h2>Precio de compraventa de vivienda, variación anual <span>· IPV nacional (INE)</span></h2>
 <div class="panel">{svg_line(ipv)}<p class="mut" style="font-size:.8rem">Índice de Precios de Vivienda (IPV), total nacional, variación anual (%). Fuente: <a href="https://www.ine.es/">INE</a>. Las medidas del BOE se registran abajo.</p></div>
 
-<h2>Mapa de calor: precio del alquiler por provincia <span>· €/m²</span></h2>
+<h2 id="mapa">Mapa de calor: precio del alquiler por provincia <span>· €/m²</span></h2>
 <div class="panel">{heatmap_provincias(rows)}<p class="mut" style="font-size:.8rem">Mediana de anuncios activos por provincia (Índice VIA). Verde = más barato · rojo = más caro.{" Datos a " + E(str(v["fecha"])) + "." if v["fecha"] else ""} <a href="https://municipal.viajeinteligencia.com/alquiler.html">Detalle por municipio ↗</a></p></div>
 
 <h2>Ejecuciones hipotecarias de vivienda por CCAA <span>· INE{f" · {eh_anyo}" if eh_anyo else ""}</span></h2>
