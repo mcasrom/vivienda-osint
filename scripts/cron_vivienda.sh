@@ -7,3 +7,4 @@ echo "[$(date -u +%F" "%T)] vivienda cron"
 ./venv/bin/python -m ingest.ine  >> logs/ingesta.log 2>&1 || echo "ine fallo" >> logs/ingesta.log
 ./venv/bin/python -m ingest.cgpj >> logs/ingesta.log 2>&1 || echo "cgpj fallo" >> logs/ingesta.log
 ./venv/bin/python gen/gen_vivienda.py >> logs/gen.log 2>&1
+/usr/bin/python3 gen/gen_og.py >> logs/gen.log 2>&1 >> logs/gen.log 2>&1
