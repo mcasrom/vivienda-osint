@@ -78,7 +78,7 @@ def etiqueta_src(f, p):
     return f'{f}<br><span class="mut">{p}</span>'
 
 
-def svg_line(serie, color="#0f766e", w=780, h=210, marcas=()):
+def svg_line(serie, color="#0f766e", w=780, h=210, marcas=(), fmt=None):
     if len(serie) < 2:
         return "<p class='mut'>serie no conectada</p>"
     ys = [v for _, v in serie]
@@ -98,12 +98,13 @@ def svg_line(serie, color="#0f766e", w=780, h=210, marcas=()):
     for k, (x, y, e, v) in enumerate(pts):
         if k % max(1, n // 8) == 0 or k == n - 1:
             out.append(f'<text x="{x:.0f}" y="{h-12}" font-size="9.5" fill="#64748b" text-anchor="middle">{E(e)}</text>')
-    out.append(f'<text x="{pts[-1][0]+6:.0f}" y="{pts[-1][1]+4:.0f}" font-size="12" fill="{color}" font-weight="700">{_pct(ys[-1])}</text>')
+    _lab = fmt(ys[-1]) if fmt else _pct(ys[-1])
+    out.append(f'<text x="{pts[-1][0]+6:.0f}" y="{pts[-1][1]+4:.0f}" font-size="12" fill="{color}" font-weight="700">{_lab}</text>')
     out.append("</svg>")
     return "".join(out)
 
 
-def svg_bars(pares, color="#0f766e", h=200, w=780):
+def svg_bars(pares, color=None, h=200, w=780, fmt=None, unidad="/m²"):
     if not pares:
         return "<p class='mut'>sin datos</p>"
     mx = max(v for _, v in pares) or 1
@@ -112,12 +113,13 @@ def svg_bars(pares, color="#0f766e", h=200, w=780):
     bw = w * 0.5
     for i, (lab, v) in enumerate(pares):
         y = i * rowh + rowh * 0.16
-        bh = rowh * 0.68
+        bh = rowh * 0.72
         ww = max(2, v / mx * bw)
-        c = "#dc2626" if v >= 8 else "#f59e0b" if v >= 5 else "#16a34a"
+        c = color or ("#dc2626" if v >= 8 else "#f59e0b" if v >= 5 else "#16a34a")
         out.append(f'<rect x="0" y="{y:.1f}" width="{ww:.1f}" height="{bh:.1f}" rx="3" fill="{c}"/>')
-        out.append(f'<text x="6" y="{y+bh*0.72:.1f}" font-size="11" fill="#fff" font-weight="600">{E(lab)}</text>')
-        out.append(f'<text x="{ww+6:.1f}" y="{y+bh*0.72:.1f}" font-size="11" fill="#334155">{_eur(v)}/m²</text>')
+        out.append(f'<text x="6" y="{y+bh*0.72:.1f}" font-size="12" fill="#fff" font-weight="600">{E(lab)}</text>')
+        txt = fmt(v) if fmt else (_eur(v) + unidad)
+        out.append(f'<text x="{ww+6:.1f}" y="{y+bh*0.72:.1f}" font-size="12" fill="#334155" font-weight="600">{txt}</text>')
     out.append("</svg>")
     return "".join(out)
 
@@ -164,9 +166,11 @@ def build():
     eh, eh_anyo, eh_total = ine.eh_ccaa()
     lz, lz_per, lz_total = cgpj.por_ccaa()
     lz_crono = " · ".join(f"{p} <b>{int(v):,}</b>".replace(",", ".") for p, v in cgpj.cronologia() if v)
-    lz_bars = "".join(f'<tr><td>{E(a)}</td><td class="num">{int(v):,}</td></tr>'.replace(",", ".") for a, v in lz[:12])
+    lz_serie = cgpj.cronologia()
+    lz_tot_txt = f"{int(lz_total):,}".replace(",", ".") if lz_total else "—"
     eh_nac = ine.eh_nacional()
     eh_crono = " · ".join(f"{a} <b>{int(v):,}</b>".replace(",", ".") for a, v in eh_nac)
+    eh_tot_txt = f"{int(eh_total):,}".replace(",", ".") if eh_total else "—"
     ipva = ine.serie("ipva_indice")
 
     tend, _ = _tendencia(ipv)
@@ -283,15 +287,19 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 <div class="panel">{heatmap_provincias(rows)}<p class="mut" style="font-size:.8rem">Mediana de anuncios activos por provincia (Índice VIA). Verde = más barato · rojo = más caro.{" Datos a " + E(str(v["fecha"])) + "." if v["fecha"] else ""} <a href="https://municipal.viajeinteligencia.com/alquiler.html">Detalle por municipio ↗</a></p></div>
 
 <h2>Ejecuciones hipotecarias de vivienda por CCAA <span>· INE{f" · {eh_anyo}" if eh_anyo else ""}</span></h2>
-<div class="panel"><table><thead><tr><th>Comunidad autónoma</th><th class="num">Viviendas</th></tr></thead><tbody>{eh_bars or "<tr><td>sin datos</td><td></td></tr>"}</tbody></table>
-<p style="font-size:.85rem;margin:8px 0"><b>Cronología nacional:</b> {eh_crono or "sin serie"}</p>
-<p class="mut" style="font-size:.8rem">Ejecuciones hipotecarias <b>iniciadas sobre vivienda</b>, por comunidad autónoma. <b>Total nacional {int(eh_total):,}</b>. Fuente: <a href="https://www.ine.es/">INE</a> (Estadística de Ejecuciones Hipotecarias).</p>
-<p class="mut" style="font-size:.8rem">Nota: los <b>lanzamientos (desahucios)</b> los publica el <b>CGPJ</b> (trimestral; próximo dato 16-oct-2026) — pendiente de conectar. Aquí se usa la serie INE de ejecuciones hipotecarias (oficial y abierta).</p></div>
+<div class="panel">
+{svg_bars(eh, color="#0f766e", h=max(180, len(eh)*27), fmt=lambda v: f"{int(v):,}".replace(",", "."), unidad="")}
+<p style="font-size:.85rem;margin:18px 0 2px"><b>Cronología nacional</b> · viviendas con ejecución iniciada, por año</p>
+{svg_line([(str(a), v) for a, v in eh_nac], color="#0f766e", fmt=lambda v: f"{int(v):,}".replace(",", "."))}
+<p class="mut" style="font-size:.8rem">Ejecuciones hipotecarias <b>iniciadas sobre vivienda</b>, por CCAA. <b>Total nacional {eh_tot_txt}</b>. Fuente: <a href="https://www.ine.es/">INE</a>.</p>
+<p class="mut" style="font-size:.8rem">Nota: los <b>lanzamientos (desahucios)</b> los publica el <b>CGPJ</b> (trimestral; próximo 16-oct-2026).</p></div>
 
 <h2>Lanzamientos (desahucios) por CCAA <span>· CGPJ{f" · {lz_per}" if lz_per else ""}</span></h2>
-<div class="panel"><table><thead><tr><th>Comunidad autónoma</th><th class="num">Lanzamientos</th></tr></thead><tbody>{lz_bars or "<tr><td>sin datos</td><td></td></tr>"}</tbody></table>
-<p style="font-size:.85rem;margin:8px 0"><b>Cronología nacional:</b> {lz_crono or "sin serie"}</p>
-<p class="mut" style="font-size:.8rem">Lanzamientos <b>practicados</b> (acto material de desalojo), por comunidad autónoma. Total {lz_per}: <b>{int(lz_total):,}</b>. Fuente: <a href="https://www.poderjudicial.es/">CGPJ</a> (Efecto de la crisis en los órganos judiciales, trimestral).</p></div>
+<div class="panel">
+{svg_bars(lz, color="#c2410c", h=max(180, len(lz)*27), fmt=lambda v: f"{int(v):,}".replace(",", "."), unidad="")}
+<p style="font-size:.85rem;margin:18px 0 2px"><b>Cronología nacional</b> · lanzamientos por trimestre</p>
+{svg_line([(str(a), v) for a, v in lz_serie], color="#c2410c", fmt=lambda v: f"{int(v):,}".replace(",", "."))}
+<p class="mut" style="font-size:.8rem">Lanzamientos <b>practicados</b> (desalojo), por CCAA. Total {lz_per}: <b>{lz_tot_txt}</b>. Fuente: <a href="https://www.poderjudicial.es/">CGPJ</a> (trimestral).</p></div>
 
 <h2 id="comparador">{E(region)} frente a España</h2>
 <div class="panel"><table><thead><tr><th>Indicador</th><th>Periodo</th><th class="num">España</th><th class="num">{E(region)}</th></tr></thead><tbody>{comp_rows}</tbody></table></div>
