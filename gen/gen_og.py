@@ -10,7 +10,6 @@ from matplotlib.colors import LinearSegmentedColormap
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB = os.path.join(ROOT, "data", "vivienda.db")
-VDB = "/home/deploy/municipal-intel/dashboard/data/via/via.db"
 OUT = os.path.join(ROOT, "web", "og.png")
 
 
@@ -18,19 +17,13 @@ def datos():
     c = sqlite3.connect(DB)
     per = c.execute("SELECT MAX(periodo) FROM lanzamientos").fetchone()[0]
     tot = c.execute("SELECT valor FROM lanzamientos WHERE ambito='TOTAL' AND periodo=?", (per,)).fetchone()
-    med = None
-    try:
-        v = sqlite3.connect(f"file:{VDB}?mode=ro", uri=True)
-        f = v.execute("SELECT MAX(fecha) FROM via_index").fetchone()[0]
-        vals = sorted(x[0] for x in v.execute("SELECT eur_m2_mediana FROM via_index WHERE fecha=? AND eur_m2_mediana IS NOT NULL", (f,)))
-        med = vals[len(vals) // 2] if vals else None
-    except Exception:
-        pass
-    return per, (tot[0] if tot else None), med
+    ipv = c.execute("SELECT etiqueta, valor FROM ine_serie WHERE serie='ipv_var_anual' "
+                    "ORDER BY fecha DESC LIMIT 1").fetchone()
+    return per, (tot[0] if tot else None), (ipv if ipv else (None, None))
 
 
 def build():
-    per, tot, med = datos()
+    per, tot, (ipv_per, ipv_val) = datos()
     fig = plt.figure(figsize=(12, 6.3), dpi=100)
     ax = fig.add_axes([0, 0, 1, 1]); ax.axis("off")
     ax.imshow(np.linspace(0, 1, 256).reshape(1, -1), extent=[0, 1, 0, 1], aspect="auto",
@@ -53,13 +46,28 @@ def build():
 
     # --- TEXTO ---
     ax.text(0.045, 0.905, "VIVIENDA · DATOS OFICIALES", color="#67e8f9", fontsize=15, fontweight="bold", zorder=5)
-    if med:
-        ax.text(0.40, 0.60, f"{med:.0f}", color="#fbbf24", fontsize=148, fontweight="bold", va="top", zorder=5)
-        ax.text(0.63, 0.455, "€/m²", color="#fbbf24", fontsize=52, fontweight="bold", va="center", zorder=5)
-        ax.text(0.41, 0.235, "alquiler mediano en España", color="#a5f3fc", fontsize=23, zorder=5)
+    if ipv_val is not None:
+        num = f"{ipv_val:+.1f}".replace(".", ",")
+        t1 = ax.text(0.40, 0.60, num, color="#fbbf24", fontsize=100, fontweight="bold", va="top", zorder=5)
+        t2 = ax.text(0.828, 0.49, "%", color="#fbbf24", fontsize=58, fontweight="bold", va="center", zorder=5)
+        t3 = ax.text(0.41, 0.235, "variación anual del precio", color="#a5f3fc", fontsize=23, zorder=5)
+        t4 = ax.text(0.41, 0.155, f"de compraventa · INE · {ipv_per}", color="#a5f3fc", fontsize=17, zorder=5)
+        _checks = ((t1, t2, "numero vs %"), (t1, t3, "numero vs etiqueta"), (t4, t3, "etiquetas"),)
+        fig.canvas.draw()
+        r = fig.canvas.get_renderer()
+        for a, b, nombre in _checks:
+            ba, bb = a.get_window_extent(r), b.get_window_extent(r)
+            if ba.overlaps(bb):
+                raise SystemExit(f"OG: solape {nombre} ({ba.x0:.0f}-{ba.x1:.0f} vs {bb.x0:.0f}-{bb.x1:.0f})")
+        ancho = fig.get_size_inches()[0] * fig.dpi
+        for a in (t1, t2, t3, t4):
+            bb = a.get_window_extent(r)
+            if bb.x1 > ancho or bb.x0 < 0 or bb.y1 > fig.get_size_inches()[1] * fig.dpi or bb.y0 < 0:
+                raise SystemExit(f"OG: texto fuera de lienzo x0={bb.x0:.0f} x1={bb.x1:.0f} «{a.get_text()}»")
+        print(f"[og] sin solapes ni desbordes (num '{num}', lienzo {ancho:.0f}px)")
     ax.text(0.045, 0.085, "pruebapublica.com", color="#fde047", fontsize=22, fontweight="bold", zorder=5)
     fig.savefig(OUT, facecolor="#0b3b4a")
-    print("[og] ok | med", med, "| tot", tot, "| per", per)
+    print("[og] ok | ipv", ipv_val, ipv_per, "| tot", tot, "| per", per)
 
 
 if __name__ == "__main__":

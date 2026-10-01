@@ -6,7 +6,6 @@ Calendario · Registro de medidas · Método y límites. Sin puntuaciones compue
 from __future__ import annotations
 import os, sys, sqlite3, html, json, csv
 from datetime import date
-from collections import defaultdict
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -134,15 +133,6 @@ def _etq_nivel(t):
     return {"subiendo": "subiendo", "bajando": "bajando", "estable": "estable"}.get(t, "")
 
 
-def _prov_agg(rows):
-    """{provincia: (mediana €/m², nº de municipios)} a partir de los anuncios VIA."""
-    prov = defaultdict(list)
-    for m, p, e, a, s, c in rows:
-        if e:
-            prov[_prov(p, c)].append(e)
-    return {k: (sorted(v)[len(v) // 2], len(v)) for k, v in prov.items()}
-
-
 def _write_dataset(did, titulo, fuente, periodo, licencia, headers, records, datasets):
     """Escribe <did>.csv y <did>.json (UTF-8) y registra el catálogo."""
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -188,10 +178,6 @@ SOURCES = [
      "BOE · datos abiertos (sumario diario XML)",
      "https://www.boe.es/datosabiertos/api/boe/sumario/AAAAMMDD",
      "Diaria", "BOE — reutilización permitida citando la fuente", "https://www.boe.es/datosabiertos/"),
-    ("VIA", "Precio del alquiler por municipio (€/m²)",
-     "Índice VIA (anuncios de alquiler activos)",
-     "https://municipal.viajeinteligencia.com/alquiler.html",
-     "Actualización periódica", "propia (indicativo; no es serie oficial)", "https://municipal.viajeinteligencia.com/alquiler.html"),
 ]
 
 
@@ -239,7 +225,7 @@ def _fuentes_html():
         f'<td><code style="font-size:.72rem;word-break:break-all">{E(ep)}</code></td><td>{E(per)}<br><span class="mut" style="font-size:.78rem">{E(lic)}</span></td>'
         f'<td><a href="{E(link)}" target="_blank" rel="noopener">ver ↗</a></td></tr>'
         for n, q, d, ep, per, lic, link in SOURCES)
-    body = f'''<h2>1. Fuentes (todas oficiales y abiertas, salvo VIA)</h2>
+    body = f'''<h2>1. Fuentes (todas oficiales y abiertas)</h2>
 <div class="panel"><table><thead><tr><th>Fuente</th><th>Qué aporta</th><th>Endpoint (reproducible)</th><th>Periodicidad / licencia</th><th></th></tr></thead><tbody>{filas}</tbody></table>
 <p class="mut" style="font-size:.8rem">Cada cifra procede de una de estas fuentes, por su API o fichero público. El endpoint exacto se indica para poder reproducirlo.</p></div>
 <h2>2. Cómo se obtiene y se verifica</h2>
@@ -251,17 +237,18 @@ def _fuentes_html():
 <h2>3. Trazabilidad por sección</h2>
 <div class="panel"><ul>
 <li>Precio (IPV) · alquiler índice (IPVA) · ejecuciones (EH) · turísticas (VTE) → <b>INE</b>.</li>
-<li>Lanzamientos (desahucios) → <b>CGPJ</b>. Decretos → <b>BOE</b>. Alquiler por municipio / mapa → <b>VIA</b>.</li>
+<li>Lanzamientos (desahucios) → <b>CGPJ</b>. Decretos → <b>BOE</b>.</li>
 </ul></div>
 <h2>4. Límites de la auditoría</h2>
 <div class="panel"><ul>
-<li><b>Licencias</b> de reutilización INE/CGPJ/MIVAU: por confirmar (uso citando fuente).</li>
+<li><b>Licencias</b> de reutilización INE/CGPJ/BOE: por confirmar (uso citando fuente).</li>
 <li><b>Momentos distintos</b>: precios, registros, alquiler fiscal y lanzamientos no se combinan en un mismo gráfico.</li>
-<li><b>VIA no es serie oficial</b> (precios de oferta): indicativo. El observatorio <b>no interpreta causalidad</b>.</li>
+<li><b>No se publica precio del alquiler por municipio ni provincia</b>: la muestra de anuncios disponible no da para una cifra defendible. El alquiler se publica solo como índice IPVA (INE), cuyo último dato es de 2024.</li>
+<li>El observatorio <b>no interpreta causalidad</b>.</li>
 </ul></div>
 <p class="mut" style="font-size:.8rem">Última revisión: {date.today().isoformat()}</p>'''
     return _shell("Fuentes y auditoría — Observatorio de la vivienda",
-                  "Fuentes oficiales (INE, CGPJ, BOE, VIA), endpoint exacto, periodicidad y cómo se verifica cada dato.",
+                  "Fuentes oficiales (INE, CGPJ, BOE), endpoint exacto, periodicidad y cómo se verifica cada dato.",
                   "https://vivienda.pruebapublica.com/fuentes.html", "Fuentes y auditoría",
                   "Qué datos usamos, de dónde salen exactamente, cada cuánto se actualizan y cómo se verifican.", body, active="/fuentes.html")
 
@@ -277,30 +264,22 @@ def _datos_html(datasets):
 <div class="panel"><table><thead><tr><th>Serie</th><th>Periodo / licencia</th><th>Descarga</th></tr></thead><tbody>{filas}</tbody></table>
 <p class="mut" style="font-size:.8rem">Cada serie se publica como <b>CSV</b> (UTF-8, separado por comas, punto decimal) y <b>JSON</b>. Los ficheros se regeneran con la página; el endpoint de cada fuente está en <a href="/fuentes.html">Fuentes</a>.</p></div>
 <h2>2. Cómo citar</h2>
-<div class="panel"><p style="font-size:.9rem">Observatorio de la vivienda (pruebapublica.com). Datos de INE, CGPJ, BOE y VIA (indicativo). Citando la fuente original y este observatorio.</p>
+<div class="panel"><p style="font-size:.9rem">Observatorio de la vivienda (pruebapublica.com). Datos de INE, CGPJ y BOE. Citando la fuente original y este observatorio.</p>
 <p class="mut" style="font-size:.82rem">Atajo: <a href="/data/latest.json">latest.json</a> (último dato de cada indicador) · catálogo <a href="/data/index.json">index.json</a> · guía para asistentes de IA: <a href="/llms.txt">/llms.txt</a>.</p></div>
 <h2>3. Límites</h2>
 <div class="panel"><ul style="font-size:.9rem">
 <li>Las cifras son <b>tal cual</b> las publica cada organismo, agregadas cuando la serie es por CCAA/provincia.</li>
-<li><b>VIA</b> es indicativo (anuncios), no serie oficial. Licencias de reutilización INE/CGPJ/BOE: reutilización con cita.</li>
+<li>No se publica precio del alquiler por municipio ni provincia (muestra insuficiente). El alquiler se publica solo como índice IPVA del INE, con su periodo.</li>
+<li>Licencias de reutilización INE/CGPJ/BOE: reutilización con cita.</li>
 </ul></div>'''
     return _shell("Datos — Observatorio de la vivienda",
-                  "Descarga en CSV y JSON de cada serie: precios (INE), alquiler, ejecuciones, lanzamientos (CGPJ) y viviendas turísticas.",
+                  "Descarga en CSV y JSON de cada serie: precios (INE), índice de alquiler, ejecuciones, lanzamientos (CGPJ) y viviendas turísticas.",
                   "https://vivienda.pruebapublica.com/datos.html", "Datos y descargas",
                   "Todas las series del observatorio, listas para reutilizar: CSV y JSON con su fuente y periodo.", body, active="/datos.html")
 
 
-def _propiedad_html(rows, v):
-    from collections import defaultdict
-    d = defaultdict(int)
-    for m, p, e, a, s, c in rows:
-        d[_prov(p, c)] += (a or 0)
-    of = sorted(d.items(), key=lambda x: -x[1])
-    total_of = sum(d.values())
-    body = f'''<h2>1. Oferta de alquiler <span>· anuncios activos (VIA)</span></h2>
-<div class="panel">{bloque_barras(of, color="#7c3aed", fmt=lambda x: f"{int(x):,}".replace(",", "."), unidad="", grupo="provincias")}
-<p class="mut" style="font-size:.8rem">Nº de <b>anuncios de alquiler activos</b> por provincia. Total: <b>{f"{total_of:,}".replace(",", ".")}</b> anuncios. Fuente: <b>VIA</b> (anuncios de portales; <b>indicativo</b>, no serie oficial). Datos a {E(str(v["fecha"]))}.</p></div>
-<h2>2. Concentración de la propiedad (propietarios por nº de viviendas)</h2>
+def _propiedad_html():
+    body = f'''<h2>1. Concentración de la propiedad (propietarios por nº de viviendas)</h2>
 <div class="panel">
 <div class="box">⚠️ <b>No hay fuente oficial abierta</b> que publique, de forma nominal y actualizada, cuántos propietarios tienen 1, 2, 5, 10 o 20 viviendas. El <b>Catastro</b> y el <b>Registro de la Propiedad</b> tienen el dato pero <b>no lo publican agregado</b> (privacidad/RGPD). Por eso <b>no lo medimos</b>.</div>
 <p style="font-size:.9rem">Dónde SÍ se publican aproximaciones (estudios, no datasets actualizables):</p>
@@ -309,20 +288,20 @@ def _propiedad_html(rows, v):
 <li><b>Banco de España</b> — boletines sobre vivienda y tenedores institucionales. <a href="https://www.bde.es/" target="_blank" rel="noopener">bde.es ↗</a></li>
 <li><b>AEAT</b> — «Estadística de viviendas declaradas en IRPF» (arrendadores, viviendas, alquiler medio; anual). <a href="https://sede.agenciatributaria.gob.es/Sede/estadisticas/estadisticas-impuesto/estadistica-viviendas-declaradas-irpf.html" target="_blank" rel="noopener">visor AEAT ↗</a></li>
 </ul></div>
-<h2>3. Grandes tenedores institucionales (SOCIMIs)</h2>
+<h2>2. Grandes tenedores institucionales (SOCIMIs)</h2>
 <div class="panel"><p style="font-size:.9rem">Los «fondos buitre» <b>no son una categoría registral</b>; muchos operan vía <b>SOCIMIs</b>, cuyos datos <b>sí</b> se publican.</p>
 <ul style="font-size:.9rem">
 <li><b>CNMV</b> — <a href="https://www.cnmv.es/portal/consultas/busquedaemisores" target="_blank" rel="noopener">registro de emisores/SOCIMIs ↗</a></li>
 <li><b>BME</b> — <a href="https://www.bolsasymercados.es/" target="_blank" rel="noopener">SOCIMIs cotizadas ↗</a></li>
 </ul>
 <p class="mut" style="font-size:.8rem">Pendiente (no automatizable con fiabilidad): sin API/CSV abierto.</p></div>
-<h2>4. Límites de esta pestaña</h2>
+<h2>3. Límites de esta pestaña</h2>
 <div class="panel"><ul style="font-size:.9rem">
-<li><b>Oferta</b> = anuncios activos (oferta, no demanda). La <b>demanda</b> solo se estima por encuestas (BdE/CIS).</li>
+<li><b>Oferta de alquiler</b>: no se publica. La muestra de anuncios disponible no alcanza para una cifra defendible.</li>
 <li><b>Propietarios por tramos</b>: no medible en abierto. <b>Tenencia institucional</b>: solo vía SOCIMIs.</li>
 </ul></div>'''
-    return _shell("Propiedad, tenedores y oferta — Observatorio de la vivienda",
-                  "Oferta de alquiler (anuncios activos), concentración de la propiedad y grandes tenedores: qué se mide en abierto y qué no.",
+    return _shell("Propiedad y grandes tenedores — Observatorio de la vivienda",
+                  "Concentración de la propiedad y grandes tenedores: qué se mide con datos abiertos y qué no.",
                   "https://vivienda.pruebapublica.com/propiedad.html", "¿Quién tiene la vivienda?",
                   "Oferta de alquiler, concentración de la propiedad y grandes tenedores. Qué se puede medir con datos abiertos y qué no.", body, active="/propiedad.html")
 
@@ -406,38 +385,11 @@ def svg_bars(pares, color=None, h=200, w=780, fmt=None, unidad="/m²"):
 
 
 def _eurp(v):
-    return f"{v:,.1f} €".replace(",", "\u00a0").replace(".", ",") if v is not None else "—"
-
-
-def heatmap_provincias(rows, w=780):
-    """Rejilla de provincias coloreada por mediana €/m² (escala de un solo tono)."""
-    dat = sorted(((p, med) for p, (med, _n) in _prov_agg(rows).items()), key=lambda x: -x[1])
-    if not dat:
-        return "<p class='mut'>sin datos</p>"
-    mx = max(v for _, v in dat) or 1
-    mn = min(v for _, v in dat)
-    cols = 6
-    rowh = 46
-    rh = ((len(dat) + cols - 1) // cols) * rowh + 8
-    out = [f'<svg viewBox="0 0 {w} {rh}" xmlns="http://www.w3.org/2000/svg" style="width:100%">']
-    for i, (p, v) in enumerate(dat):
-        r, cc = divmod(i, cols)
-        t = (v - mn) / ((mx - mn) or 1)
-        # escala secuencial de un solo tono (teal claro -> teal oscuro); sin lectura bueno/malo
-        R = int(204 + t * (15 - 204)); G = int(251 + t * (118 - 251)); B = int(241 + t * (110 - 241))
-        x = cc * (w / cols); y = r * rowh
-        out.append(f'<rect x="{x+2:.0f}" y="{y+2:.0f}" width="{w/cols-4:.0f}" height="{rowh-4}" rx="5" fill="rgb({R},{G},{B})"/>')
-        fg = "#0f172a" if t < 0.55 else "#ffffff"
-        lbl = E(p if len(p) <= 16 else p[:15] + "…")
-        out.append(f'<text x="{x+8:.0f}" y="{y+rowh*0.55:.0f}" font-size="10.5" fill="{fg}" font-weight="600">{lbl}</text>')
-        out.append(f'<text x="{x+8:.0f}" y="{y+rowh*0.85:.0f}" font-size="9.5" fill="{fg}" opacity="0.85">{_eurp(v)}/m²</text>')
-    out.append("</svg>")
-    return "".join(out)
+    return f"{v:,.1f} €".replace(",", " ").replace(".", ",") if v is not None else "—"
 
 
 def build():
     v = via.resumen()
-    rows = v["rows"]
     hoy = date.today().isoformat()
     region = "Murcia"
 
@@ -464,14 +416,12 @@ def build():
     per_ipva = ipva_s[-1][0] if ipva_s else "—"
     per_lz = lz_per or "—"
     per_eh = str(eh_anyo) if eh_anyo else "—"
-    per_med = v["fecha"] or "—"
     per_vut = str(vut_anyo) if vut_anyo else "—"
-    ind_now = {"ipv": (ipv_ult, per_ipv), "ipva": (ipva_var, per_ipva), "med": (v["mediana"], per_med),
+    ind_now = {"ipv": (ipv_ult, per_ipv), "ipva": (ipva_var, per_ipva),
                "lz": (lz_total, per_lz), "eh": (eh_total, per_eh), "vut": (vut_total, per_vut)}
     b0 = congelar_baseline(ind_now).get("ind", {})
     _IND = [("ipv", "pct", "Precio compraventa (IPV, var. anual)", "INE"),
             ("ipva", "pct", "Alquiler — índice (IPVA, var. anual)", "INE"),
-            ("med", "eur", "Alquiler mediano (€/m²)", "VIA"),
             ("lz", "int", "Lanzamientos (desahucios)", "CGPJ"),
             ("eh", "int", "Ejecuciones hipotecarias", "INE"),
             ("vut", "int", "Viviendas turísticas (VUT)", "INE")]
@@ -507,7 +457,6 @@ def build():
              "CGPJ · lanzamientos (desahucios)", per_lz),
         _ind((f"{int(eh_total):,}".replace(",", ".") if eh_total else "—"), "", tend_eh, _etq_nivel(tend_eh),
              "INE · ejecuciones hipotecarias", per_eh),
-        _ind(_eur(v["mediana"]), "/m²", "", "indicativo · anuncios activos", "VIA · alquiler mediano", per_med),
     ])
 
     eh_bars = "".join(
@@ -515,16 +464,6 @@ def build():
         for k, v in eh[:12])
 
     # comparador España vs región
-    prov = defaultdict(list)
-    for m, p, e, a, s, c in rows:
-        if e:
-            prov[_prov(p, c)].append(e)
-    esp_med = v["mediana"]
-    reg_provs = sorted([p for p in prov if region.lower() in p.lower()]) or [region]
-    reg_med = None
-    for p in reg_provs:
-        if prov[p]:
-            reg_med = sorted(prov[p])[len(prov[p]) // 2]
     reg_lz = None
     reg_lz_nom = ""
     for k, val in lz:
@@ -532,7 +471,6 @@ def build():
             reg_lz, reg_lz_nom = val, k
             break
     comp_rows = "".join(
-        f'<tr><td>Alquiler €/m² (anuncios)</td><td>{E(str(v["fecha"]))}</td><td class="num">{_eur(esp_med)}</td><td class="num">{_eur(reg_med) if reg_med else "sin dato"}</td></tr>'
         f'<tr><td>Compraventa (IPV, var. anual)</td><td>{E(per_ipv)}</td><td class="num">{_pct(ipv_ult)}</td><td class="num mut">no ingestado por CCAA</td></tr>'
         f'<tr><td>Lanzamientos judiciales</td><td>{E(per_lz)}</td><td class="num">{_fmtv("int", lz_total)}</td><td class="num">{_fmtv("int", reg_lz) if reg_lz is not None else "sin dato"}</td></tr>')
 
@@ -586,12 +524,6 @@ def build():
                    str(vut_anyo) if vut_anyo else "—", "INE — reutilización citando fuente",
                    ["ccaa", "viviendas_turisticas"],
                    [{"ccaa": k, "viviendas_turisticas": int(v)} for k, v in vut], datasets)
-    pagg = _prov_agg(rows)
-    _write_dataset("alquiler-provincia-via", "Alquiler por provincia (mediana de municipios VIA)",
-                   "VIA (anuncios)", str(v["fecha"]), "propia — indicativo, no serie oficial",
-                   ["provincia", "eur_m2_mediana", "municipios"],
-                   [{"provincia": k, "eur_m2_mediana": round(med, 2), "municipios": n}
-                    for k, (med, n) in sorted(pagg.items(), key=lambda x: -x[1][0])], datasets)
     _write_dataset("boe-vivienda", "Disposiciones generales del BOE sobre vivienda",
                    "BOE · sumario diario (sección I)", "diaria (últimos 21 días)", "BOE — reutilización citando fuente",
                    ["fecha", "ambito", "departamento", "titulo", "url"],
@@ -603,7 +535,7 @@ def build():
         ctrl_rows.append({"indicador": tt, "referencia": rv, "periodo_referencia": rp,
                           "ultimo": uv, "periodo_ultimo": up, "fuente": src})
     _write_dataset("punto-control", "Punto de control (referencia vs último dato)",
-                   "varias (INE/CGPJ/VIA)", "ver columnas de periodo", "varias — ver fuente",
+                   "varias (INE/CGPJ)", "ver columnas de periodo", "varias — ver fuente",
                    ["indicador", "referencia", "periodo_referencia", "ultimo", "periodo_ultimo", "fuente"],
                    ctrl_rows, datasets)
     with open(os.path.join(DATA_DIR, "index.json"), "w", encoding="utf-8") as f:
@@ -616,9 +548,9 @@ def build():
         ensure_ascii=False)
 
     # instantánea combinada con el último dato de cada indicador
-    _uni = {"ipv": "%", "ipva": "%", "med": "€/m²", "lz": "lanzamientos", "eh": "ejecuciones", "vut": "viviendas"}
+    _uni = {"ipv": "%", "ipva": "%", "lz": "lanzamientos", "eh": "ejecuciones", "vut": "viviendas"}
     _tm = {"ipv": (tend, "var"), "ipva": (tend_ia, "var"), "lz": (tend_lz, "nivel"),
-           "eh": (tend_eh, "nivel"), "med": ("", ""), "vut": ("", "")}
+           "eh": (tend_eh, "nivel"), "vut": ("", "")}
     indicadores = {}
     for k, tp, tt, src in _IND:
         val, per = _vp(ind_now.get(k))
@@ -638,13 +570,13 @@ def build():
     llms = f"""# Observatorio de la vivienda
 
 > Observatorio cívico e independiente que publica datos oficiales de vivienda en España
-> (INE, CGPJ, BOE) y un indicador de alquiler (VIA). Encuadre neutral: sin puntuaciones
-> compuestas ni atribuciones; cada cifra lleva unidad, fuente y fecha.
+> (INE, CGPJ, BOE). Encuadre neutral: sin puntuaciones compuestas ni atribuciones; cada
+> cifra lleva unidad, fuente y fecha.
 
 ## Páginas
 - Panel: https://vivienda.pruebapublica.com/
 - Fuentes, método y límites: https://vivienda.pruebapublica.com/fuentes.html
-- Propiedad, oferta y grandes tenedores: https://vivienda.pruebapublica.com/propiedad.html
+- Propiedad y grandes tenedores: https://vivienda.pruebapublica.com/propiedad.html
 - Datos y descargas: https://vivienda.pruebapublica.com/datos.html
 
 ## Datos abiertos (CSV / JSON, sin registro)
@@ -653,13 +585,19 @@ def build():
 - Una serie por indicador; cada una en `/data/<serie>.csv` y `/data/<serie>.json`:
   precios-ipv · alquiler-ipva · ejecuciones-hipotecarias-ccaa · ejecuciones-hipotecarias-nacional ·
   lanzamientos-ccaa · lanzamientos-cronologia · viviendas-turisticas-ccaa ·
-  alquiler-provincia-via · boe-vivienda · punto-control
+  boe-vivienda · punto-control
 
 ## Fuentes
 - INE: IPV (tabla 80270), IPVA (59056), ejecuciones hipotecarias (10740), viviendas turísticas (46141).
 - CGPJ: «Efecto de la crisis en los órganos judiciales» (lanzamientos, Excel trimestral).
 - BOE: sumario diario, sección I (disposiciones generales).
-- VIA: precio de oferta del alquiler (indicativo; no es serie oficial).
+
+## Alcance de los datos
+- Todas las series proceden de organismos públicos y son reproducibles por su endpoint.
+- <b>No se publica precio del alquiler por municipio ni por provincia.</b> La muestra de
+  anuncios disponible no alcanza para una cifra defendible y se retiró de forma deliberada.
+- El único indicador de alquiler es el <b>IPVA del INE</b> (índice anual de variación, no un
+  nivel de precio): su último dato disponible es de 2024 y así se indica siempre junto a la cifra.
 
 ## Licencia y cita
 - Observatorio: CC BY 4.0. Fuentes: reutilización citando al organismo.
@@ -669,6 +607,8 @@ def build():
 - No se afirma causalidad; el punto de control usa la referencia por periodo de cada serie.
 - Los datos publicados miden periodos anteriores a los RDL de 29-sep-2026; la primera lectura
   posterior es el 4T-2026 (~feb-2027).
+- El IPVA (alquiler) es un índice anual: describe la variación, no un precio por m², y su
+  último dato es de 2024.
 """
     with open(os.path.join(ROOT, "web", "llms.txt"), "w", encoding="utf-8") as f:
         f.write(llms)
@@ -677,7 +617,7 @@ def build():
 <meta name="google-site-verification" content="mlyuKtDMOhZ2x2lMrqr-MHT9LeUW8i6uEJw1Sv6AzNY">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Observatorio de la vivienda — datos oficiales</title>
-<meta name="description" content="Qué dicen los datos oficiales de vivienda (INE, CGPJ, MIVAU, BOE), sin puntuaciones ni atribuciones. Precio, alquiler, compraventas, lanzamientos y medidas. Mapa de calor y comparador.">
+<meta name="description" content="Qué dicen los datos oficiales de vivienda (INE, CGPJ, BOE), sin puntuaciones ni atribuciones. Compraventas, alquiler, ejecuciones hipotecarias, lanzamientos y viviendas turísticas, con fuente y fecha.">
 <link rel="canonical" href="https://vivienda.pruebapublica.com/">
 <meta property="og:title" content="Observatorio de la vivienda">
 <meta property="og:description" content="Datos oficiales de vivienda con fuente y fecha. Sin puntuaciones ni atribuciones.">
@@ -692,11 +632,11 @@ def build():
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Observatorio de la vivienda">
-<meta name="twitter:description" content="Precio del alquiler por municipio, evolución (INE), decretos (BOE) y desahucios (CGPJ) por CCAA.">
+<meta name="twitter:description" content="Evolución de precios (INE), ejecuciones hipotecarias, lanzamientos (CGPJ), viviendas turísticas y decretos (BOE).">
 <meta name="twitter:image" content="https://vivienda.pruebapublica.com/og.png">
 <script type="application/ld+json">
 {{"@context":"https://schema.org","@type":"Dataset","name":"Observatorio de la vivienda",
-"description":"Datos oficiales de vivienda en España: precio del alquiler por municipio (VIA), evolución de precios (INE), ejecuciones hipotecarias y lanzamientos por CCAA (INE/CGPJ), y registro de medidas (BOE).",
+"description":"Datos oficiales de vivienda en España: evolución de precios de compraventa y del alquiler (INE), ejecuciones hipotecarias y lanzamientos por CCAA (INE/CGPJ), viviendas turísticas (INE) y registro de disposiciones sobre vivienda (BOE).",
 "url":"https://vivienda.pruebapublica.com/","creator":{{"@type":"Organization","name":"pruebapublica.com"}},
 "license":"https://creativecommons.org/licenses/by/4.0/","isAccessibleForFree":true,
 "distribution":{distrib_json},
@@ -725,7 +665,7 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 @media(max-width:820px){{.inds{{grid-template-columns:repeat(2,1fr)}} .grid{{grid-template-columns:1fr}}}}
 </style></head><body>
 <nav class="nav"><div class="in"><b>🏠 Observatorio de la vivienda</b>
-<a href="#indicadores">Indicadores</a><a href="#mapa">Mapa</a><a href="#comparador">Comparador</a><a href="#calendario">Calendario</a><a href="#medidas">Medidas</a><a href="#metodo">Método</a><a href="#apoyar">Apoyar</a><a href="/fuentes.html">Fuentes</a><a href="/propiedad.html">Propiedad</a><a href="/datos.html">Datos</a>
+<a href="#indicadores">Indicadores</a><a href="#comparador">Comparador</a><a href="#calendario">Calendario</a><a href="#medidas">Medidas</a><a href="#metodo">Método</a><a href="#apoyar">Apoyar</a><a href="/fuentes.html">Fuentes</a><a href="/propiedad.html">Propiedad</a><a href="/datos.html">Datos</a>
 <a href="https://pruebapublica.com" style="opacity:.7">pruebapublica.com</a></div></nav>
 <header class="hero"><div class="wrap">
 <h1>Qué dicen los datos oficiales de vivienda, sin puntuaciones ni atribuciones</h1>
@@ -735,9 +675,6 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 <main>
 <h2>Precio de compraventa de vivienda, variación anual <span>· IPV nacional (INE)</span></h2>
 <div class="panel">{svg_line(ipv)}<p class="mut" style="font-size:.8rem">Índice de Precios de Vivienda (IPV), total nacional, variación anual (%). Fuente: <a href="https://www.ine.es/">INE</a>. Las medidas del BOE se registran abajo.</p>{_descarga("precios-ipv")}</div>
-
-<h2 id="mapa">Mapa de calor: precio del alquiler por provincia <span>· €/m²</span></h2>
-<div class="panel">{heatmap_provincias(rows)}<p class="mut" style="font-size:.8rem">Mediana de los municipios con datos VIA de cada provincia (anuncios activos; no es un promedio provincial oficial). <b>Más claro = menos €/m² · más oscuro = más €/m²</b> (misma escala, sin juicio de valor).{" Datos a " + E(str(v["fecha"])) + "." if v["fecha"] else ""} <a href="https://municipal.viajeinteligencia.com/alquiler.html">Detalle por municipio ↗</a></p>{_descarga("alquiler-provincia-via")}</div>
 
 <h2>Ejecuciones hipotecarias de vivienda por CCAA <span>· INE{f" · {eh_anyo}" if eh_anyo else ""}</span></h2>
 <div class="panel">
@@ -761,7 +698,7 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 
 <h2 id="control">Punto de control · decretos de sep–oct 2026</h2>
 <div class="panel">
-<p style="margin:0 0 12px">Los RDL 26/2026 y 27/2026 se publicaron el <b>29-sep-2026</b>. La <b>referencia</b> es el último dato disponible de cada serie <b>en su propio periodo</b> (no una fecha de corte): precios (IPV/IPVA), lanzamientos (CGPJ), ejecuciones (INE), viviendas turísticas (VUT) y alquiler (VIA).</p>
+<p style="margin:0 0 12px">Los RDL 26/2026 y 27/2026 se publicaron el <b>29-sep-2026</b>. La <b>referencia</b> es el último dato disponible de cada serie <b>en su propio periodo</b> (no una fecha de corte): precios (IPV/IPVA), lanzamientos (CGPJ), ejecuciones (INE) y viviendas turísticas (VUT).</p>
 <table><thead><tr><th>Indicador</th><th class="num">Referencia · valor · periodo</th><th class="num">Último dato · valor · periodo</th><th class="num">Δ</th><th>Fuente</th></tr></thead><tbody>{filas_control}</tbody></table>
 <p class="mut" style="font-size:.8rem">⚠️ <b>Ninguna serie publicada mide todavía el periodo posterior a los decretos.</b> Los hitos de <b>16-oct-2026 (CGPJ 2T) y 14-dic-2026 (CGPJ 3T)</b> describen periodos <b>anteriores</b> a los RDL; la primera lectura posterior (4T-2026) llegará en <b>~feb-2027</b>. Cada dato nuevo se compara con esta referencia.</p>{_descarga("punto-control")}</div>
 
@@ -778,10 +715,11 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 <div class="panel"><ul>
 <li>Solo series <b>oficiales</b> con fuente, fecha y periodicidad visibles.</li>
 <li>Precios notariales, registros y alquiler fiscal miden <b>momentos distintos</b>: no se combinan en un mismo gráfico.</li>
-<li>El alquiler oficial procede de datos <b>tributarios</b> (retraso anual). <b>No</b> se usan precios de oferta de portales en las series oficiales.</li>
+<li>El alquiler se publica solo como <b>índice de variación (IPVA, INE)</b>, no como precio por m²: un índice anual no es un nivel de precio y su último dato disponible es de 2024.</li>
+<li><b>No se publica precio del alquiler por municipio ni por provincia.</b> La muestra de anuncios de que se dispone no permite una cifra defendible, y se prefiere no publicarla antes que publicar un número sin base suficiente.</li>
 <li><b>Sin puntuaciones compuestas</b> ni atribuciones: «Subiendo/Estable/Bajando» compara el último dato con el anterior de la misma fuente.</li>
 </ul>
-<p class="mut" style="font-size:.82rem">El mapa de calor usa anuncios de alquiler activos (Índice VIA) — es indicativo, no una serie oficial. Licencias de reutilización de INE/CGPJ/MIVAU por confirmar. Generado {hoy}.</p></div>
+<p class="mut" style="font-size:.82rem">Licencias de reutilización de INE/CGPJ/BOE por confirmar. Generado {hoy}.</p></div>
 
 <h2 id="apoyar">Apoyar</h2>
 <div class="panel" style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">
@@ -789,7 +727,7 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
   <a href="https://ko-fi.com/m_castillo" target="_blank" rel="noopener" style="background:var(--accent);color:#fff;font-weight:700;padding:13px 24px;border-radius:10px;text-decoration:none;white-space:nowrap">☕ Apoyar en Ko-fi →</a>
 </div>
 </main>
-<footer>Observatorio de la vivienda · microservicio de <a href="https://pruebapublica.com">pruebapublica.com</a> · datos solo de fuentes <b>públicas</b> (INE/CGPJ/MIVAU/BOE/VIA).<br>No analiza redes ni coordinación: solo hechos oficiales y su evolución.</footer>
+<footer>Observatorio de la vivienda · microservicio de <a href="https://pruebapublica.com">pruebapublica.com</a> · datos solo de fuentes <b>públicas</b> (INE/CGPJ/BOE).<br>No analiza redes ni coordinación: solo hechos oficiales y su evolución.</footer>
 </body></html>"""
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
@@ -803,10 +741,10 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
     with open(os.path.join(ROOT, "web", "fuentes.html"), "w", encoding="utf-8") as f:
         f.write(_fuentes_html())
     with open(os.path.join(ROOT, "web", "propiedad.html"), "w", encoding="utf-8") as f:
-        f.write(_propiedad_html(rows, v))
+        f.write(_propiedad_html())
     with open(os.path.join(ROOT, "web", "datos.html"), "w", encoding="utf-8") as f:
         f.write(_datos_html(datasets))
-    print(f"[gen] index + fuentes + propiedad + datos + {len(datasets)} series (CSV/JSON) · IPV={len(ipv)} pts · EH CCAA={len(eh)} · {v['n']} municipios")
+    print(f"[gen] index + fuentes + propiedad + datos + {len(datasets)} series (CSV/JSON) · IPV={len(ipv)} pts · EH CCAA={len(eh)} · alquiler NO publicado ({v['n']} municipios disponibles, muestra no publicable)")
 
 
 if __name__ == "__main__":
