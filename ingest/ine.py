@@ -97,6 +97,40 @@ def eh_ccaa(anyo=None):
     return rows, anyo, (total[0] if total else None)
 
 
+def ingest_vte() -> int:
+    """VTE (tabla 46141): viviendas turísticas por CCAA (dato base) + % nacional."""
+    c = _con()
+    n = 0
+    d = _get("https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA/46141?nult=2&tip=A")
+    for s in d:
+        nom = s.get("Nombre", "")
+        data = s.get("Data", [])
+        if not data:
+            continue
+        x = data[-1]
+        if x.get("Valor") is None:
+            continue
+        if "Viviendas turísticas. Dato base." in nom:
+            ambito = nom.split(".")[0].strip()
+            n += c.execute("INSERT OR REPLACE INTO ine_serie VALUES(?,?,?,?)",
+                           ("vte:" + ambito, str(x.get("Anyo")), ambito, float(x["Valor"]))).rowcount
+        elif nom.startswith("Total Nacional. Porcentaje de viviendas turísticas"):
+            c.execute("INSERT OR REPLACE INTO ine_serie VALUES(?,?,?,?)",
+                      ("vte_pct", str(x.get("Anyo")), "pct", float(x["Valor"])))
+    c.commit()
+    return n
+
+
+def vte_ccaa():
+    c = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
+    anyo = c.execute("SELECT MAX(fecha) FROM ine_serie WHERE serie LIKE 'vte:%'").fetchone()[0]
+    rows = c.execute("SELECT etiqueta, valor FROM ine_serie WHERE serie LIKE 'vte:%' AND fecha=? "
+                     "AND etiqueta<>'Total Nacional' ORDER BY valor DESC", (anyo,)).fetchall()
+    tot = c.execute("SELECT valor FROM ine_serie WHERE serie='vte:Total Nacional' AND fecha=?", (anyo,)).fetchone()
+    pct = c.execute("SELECT valor FROM ine_serie WHERE serie='vte_pct'").fetchone()
+    return rows, anyo, (tot[0] if tot else None), (pct[0] if pct else None)
+
+
 def eh_nacional():
     """[(año, valor)] de la serie nacional de ejecuciones hipotecarias."""
     try:
@@ -120,4 +154,4 @@ def ultimo(nombre: str):
 
 
 if __name__ == "__main__":
-    print(f"[ine] puntos actualizados: {ingest()} · EH: {ingest_eh()}")
+    print(f"[ine] puntos actualizados: {ingest()} · EH: {ingest_eh()} · VTE: {ingest_vte()}")

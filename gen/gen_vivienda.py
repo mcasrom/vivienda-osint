@@ -172,6 +172,8 @@ def build():
     eh_nac = ine.eh_nacional()
     eh_crono = " · ".join(f"{a} <b>{int(v):,}</b>".replace(",", ".") for a, v in eh_nac)
     eh_tot_txt = f"{int(eh_total):,}".replace(",", ".") if eh_total else "—"
+    vut, vut_anyo, vut_total, vut_pct = ine.vte_ccaa()
+    vut_tot_txt = f"{int(vut_total):,}".replace(",", ".") if vut_total else "—"
     ipva = ine.serie("ipva_indice")
 
     tend, _ = _tendencia(ipv)
@@ -301,6 +303,24 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 <p style="font-size:.85rem;margin:18px 0 2px"><b>Cronología nacional</b> · lanzamientos por trimestre</p>
 {svg_line([(str(a), v) for a, v in lz_serie], color="#c2410c", fmt=lambda v: f"{int(v):,}".replace(",", "."))}
 <p class="mut" style="font-size:.8rem">Lanzamientos <b>practicados</b> (desalojo), por CCAA. Total {lz_per}: <b>{lz_tot_txt}</b>. Fuente: <a href="https://www.poderjudicial.es/">CGPJ</a> (trimestral).</p></div>
+
+<h2>Viviendas turísticas por CCAA <span>· INE{f" · {vut_anyo}" if vut_anyo else ""}</span></h2>
+<div class="panel">
+{svg_bars(vut, color="#7c3aed", h=max(180, len(vut)*27), fmt=lambda v: f"{int(v):,}".replace(",", "."), unidad="")}
+<p class="mut" style="font-size:.8rem">Viviendas de uso turístico (VUT). Total nacional: <b>{vut_tot_txt}</b>{" · " + f"{vut_pct:.2f} %" if vut_pct else ""} del total de viviendas censadas. Fuente: <a href="https://www.ine.es/">INE</a> (Estadística de Viviendas Turísticas).</p></div>
+
+<h2 id="control">Punto de control · decretos de sep–oct 2026</h2>
+<div class="panel">
+<p style="margin:0 0 12px"><b>t0 = 29-sep-2026</b> (RDL 26/2026 «función social de la vivienda» y RDL 27/2026; + octubre 2026). Se marca como <b>punto de control</b> para observar la evolución <b>a partir de ahí</b>: precios (IPV/IPVA), desahucios (CGPJ), ejecuciones (INE), viviendas turísticas (VUT) y oferta/demanda.</p>
+<table><thead><tr><th>Indicador</th><th class="num">Baseline en t0</th><th>Fuente</th></tr></thead><tbody>
+<tr><td>Precio compraventa (IPV, var. anual)</td><td class="num">{_pct(ipv_ult)}</td><td>INE</td></tr>
+<tr><td>Alquiler — índice (IPVA, var. anual)</td><td class="num">{_pct(ipva_var)}</td><td>INE</td></tr>
+<tr><td>Alquiler mediano (€/m²)</td><td class="num">{_eur(v["mediana"])}</td><td>VIA</td></tr>
+<tr><td>Lanzamientos (desahucios)</td><td class="num">{lz_tot_txt} ({lz_per})</td><td>CGPJ</td></tr>
+<tr><td>Ejecuciones hipotecarias</td><td class="num">{eh_tot_txt} ({eh_anyo})</td><td>INE</td></tr>
+<tr><td>Viviendas turísticas</td><td class="num">{vut_tot_txt} ({vut_anyo})</td><td>INE</td></tr>
+</tbody></table>
+<p class="mut" style="font-size:.8rem">Próximos hitos: <b>CGPJ 2T-2026 → 16-oct-2026</b>; INE IPV/IPVA trimestral; VTE anual. Cada dato nuevo se comparará con este baseline.</p></div>
 
 <h2 id="comparador">{E(region)} frente a España</h2>
 <div class="panel"><table><thead><tr><th>Indicador</th><th>Periodo</th><th class="num">España</th><th class="num">{E(region)}</th></tr></thead><tbody>{comp_rows}</tbody></table></div>
