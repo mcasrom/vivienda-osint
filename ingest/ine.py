@@ -107,7 +107,7 @@ def ingest_vte() -> int:
         data = s.get("Data", [])
         if not data:
             continue
-        x = data[-1]
+        x = max(data, key=lambda p: p.get("Fecha") or "")
         if x.get("Valor") is None:
             continue
         if "Viviendas turísticas. Dato base." in nom:
