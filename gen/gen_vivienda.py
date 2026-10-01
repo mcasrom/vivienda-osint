@@ -248,8 +248,12 @@ def svg_line(serie, color="#0f766e", w=780, h=210, marcas=(), fmt=None):
     for k, (x, y, e, v) in enumerate(pts):
         if k % max(1, n // 8) == 0 or k == n - 1:
             out.append(f'<text x="{x:.0f}" y="{h-12}" font-size="9.5" fill="#64748b" text-anchor="middle">{E(e)}</text>')
-    _lab = fmt(ys[-1]) if fmt else _pct(ys[-1])
-    out.append(f'<text x="{pts[-1][0]+6:.0f}" y="{pts[-1][1]+4:.0f}" font-size="12" fill="{color}" font-weight="700">{_lab}</text>')
+    # valor en cada punto (rotulado)
+    for x, y, e, v in pts:
+        lab = fmt(v) if fmt else _pct(v)
+        va = "bottom" if y > h * 0.5 else "top"
+        dy = -7 if va == "bottom" else 12
+        out.append(f'<text x="{x:.0f}" y="{y+dy:.0f}" font-size="9.5" fill="#0f172a" text-anchor="middle" font-weight="700">{lab}</text>')
     out.append("</svg>")
     return "".join(out)
 
