@@ -1,6 +1,12 @@
 __pycache__/
 *.pyc
 .env
+venv/
 data/*.db
 logs/
 web/index.html
+web/fuentes.html
+web/propiedad.html
+web/sitemap.xml
+web/robots.txt
+web/og.png
