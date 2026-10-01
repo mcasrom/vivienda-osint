@@ -10,7 +10,7 @@ from collections import defaultdict
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from ingest import boe as boeing, via, ine  # noqa: E402
+from ingest import boe as boeing, via, ine, cgpj  # noqa: E402
 
 OUT = os.path.join(ROOT, "web", "index.html")
 E = html.escape
@@ -142,6 +142,9 @@ def build():
     nueva = ine.ultimo("ipv_nueva_var")
     seg = ine.ultimo("ipv_segunda_var")
     eh, eh_anyo, eh_total = ine.eh_ccaa()
+    lz, lz_per, lz_total = cgpj.por_ccaa()
+    lz_crono = " · ".join(f"{p} <b>{int(v):,}</b>".replace(",", ".") for p, v in cgpj.cronologia() if v)
+    lz_bars = "".join(f'<tr><td>{E(a)}</td><td class="num">{int(v):,}</td></tr>'.replace(",", ".") for a, v in lz[:12])
     eh_nac = ine.eh_nacional()
     eh_crono = " · ".join(f"{a} <b>{int(v):,}</b>".replace(",", ".") for a, v in eh_nac)
     ipva = ine.serie("ipva_indice")
@@ -223,7 +226,7 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 @media(max-width:820px){{.inds{{grid-template-columns:repeat(2,1fr)}} .grid{{grid-template-columns:1fr}}}}
 </style></head><body>
 <nav class="nav"><div class="in"><b>🏠 Observatorio de la vivienda</b>
-<a href="#indicadores">Indicadores</a><a href="#mapa">Mapa</a><a href="#comparador">Comparador</a><a href="#calendario">Calendario</a><a href="#medidas">Medidas</a><a href="#metodo">Método</a>
+<a href="#indicadores">Indicadores</a><a href="#mapa">Mapa</a><a href="#comparador">Comparador</a><a href="#calendario">Calendario</a><a href="#medidas">Medidas</a><a href="#metodo">Método</a><a href="#apoyar">Apoyar</a>
 <a href="https://pruebapublica.com" style="opacity:.7">pruebapublica.com</a></div></nav>
 <header class="hero"><div class="wrap">
 <h1>Qué dicen los datos oficiales de vivienda, sin puntuaciones ni atribuciones</h1>
@@ -243,6 +246,11 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 <p class="mut" style="font-size:.8rem">Ejecuciones hipotecarias <b>iniciadas sobre vivienda</b>, por comunidad autónoma. <b>Total nacional {int(eh_total):,}</b>. Fuente: <a href="https://www.ine.es/">INE</a> (Estadística de Ejecuciones Hipotecarias).</p>
 <p class="mut" style="font-size:.8rem">Nota: los <b>lanzamientos (desahucios)</b> los publica el <b>CGPJ</b> (trimestral; próximo dato 16-oct-2026) — pendiente de conectar. Aquí se usa la serie INE de ejecuciones hipotecarias (oficial y abierta).</p></div>
 
+<h2>Lanzamientos (desahucios) por CCAA <span>· CGPJ{f" · {lz_per}" if lz_per else ""}</span></h2>
+<div class="panel"><table><thead><tr><th>Comunidad autónoma</th><th class="num">Lanzamientos</th></tr></thead><tbody>{lz_bars or "<tr><td>sin datos</td><td></td></tr>"}</tbody></table>
+<p style="font-size:.85rem;margin:8px 0"><b>Cronología nacional:</b> {lz_crono or "sin serie"}</p>
+<p class="mut" style="font-size:.8rem">Lanzamientos <b>practicados</b> (acto material de desalojo), por comunidad autónoma. Total {lz_per}: <b>{int(lz_total):,}</b>. Fuente: <a href="https://www.poderjudicial.es/">CGPJ</a> (Efecto de la crisis en los órganos judiciales, trimestral).</p></div>
+
 <h2 id="comparador">{E(region)} frente a España</h2>
 <div class="panel"><table><thead><tr><th>Indicador</th><th>Periodo</th><th class="num">España</th><th class="num">{E(region)}</th></tr></thead><tbody>{comp_rows}</tbody></table></div>
 
@@ -260,6 +268,12 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 <li><b>Sin puntuaciones compuestas</b> ni atribuciones: «Subiendo/Estable/Bajando» compara el último dato con el anterior de la misma fuente.</li>
 </ul>
 <p class="mut" style="font-size:.82rem">El mapa de calor usa anuncios de alquiler activos (Índice VIA) — es indicativo, no una serie oficial. Licencias de reutilización de INE/CGPJ/MIVAU por confirmar. Generado {hoy}.</p></div>
+
+<h2 id="apoyar">Apoyar</h2>
+<div class="panel" style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">
+  <div style="flex:1;min-width:240px">Este observatorio es <b>independiente y sin publicidad</b>. Se mantiene con <b>donaciones puntuales</b> de quien lo encuentra útil. Sin ellas, no hay servicio.</div>
+  <a href="https://ko-fi.com/m_castillo" target="_blank" rel="noopener" style="background:var(--accent);color:#fff;font-weight:700;padding:13px 24px;border-radius:10px;text-decoration:none;white-space:nowrap">☕ Apoyar en Ko-fi →</a>
+</div>
 </main>
 <footer>Observatorio de la vivienda · microservicio de <a href="https://pruebapublica.com">pruebapublica.com</a> · datos solo de fuentes <b>públicas</b> (INE/CGPJ/MIVAU/BOE/VIA).<br>No analiza redes ni coordinación: solo hechos oficiales y su evolución.</footer>
 </body></html>"""
