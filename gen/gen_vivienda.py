@@ -140,66 +140,74 @@ SOURCES = [
 ]
 
 
+
+CSS = """
+:root{--ink:#0f172a;--mut:#64748b;--accent:#0f766e;--line:#e2e8f0;--bg:#f8fafc;--card:#fff}
+*{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.6}
+.nav{position:sticky;top:0;background:#0f766e;color:#fff;z-index:9} .nav .in{max-width:1060px;margin:0 auto;padding:10px 20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;font-size:.86rem}
+.nav a{color:#fff;text-decoration:none;opacity:.9} .nav a:hover{opacity:1} .nav b{margin-right:auto}
+.hero{background:linear-gradient(135deg,#0f766e,#0e7490 70%,#0369a1);color:#fff;padding:40px 20px 52px}
+.wrap{max-width:1060px;margin:0 auto;padding:0 20px} .hero h1{font-size:2rem;margin:0 0 8px} .hero p{margin:0;opacity:.95;max-width:760px}
+main{max-width:1060px;margin:0 auto;padding:34px 20px 60px} h2{font-size:1.2rem;margin:34px 0 10px} h2 span{color:var(--mut);font-weight:400;font-size:.85rem}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px 22px;margin-bottom:14px}
+.mut{color:var(--mut)} a{color:var(--accent)}
+table{width:100%;border-collapse:collapse;font-size:.88rem} th{text-align:left;padding:8px 10px;border-bottom:2px solid var(--accent);color:var(--mut);font-size:.74rem;text-transform:uppercase} td{padding:8px 10px;border-bottom:1px solid var(--line)} .num{text-align:right;font-variant-numeric:tabular-nums}
+code{background:#f1f5f9;padding:1px 4px;border-radius:4px}
+.box{margin:12px 0;padding:12px 16px;background:#fffbeb;border-left:4px solid #d97706;border-radius:6px;font-size:.88rem}
+footer{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;color:var(--mut)} footer a{color:var(--accent)}
+"""
+
+
+def _shell(titulo, desc, canonical, h1, intro, body, active=""):
+    def na(href, txt):
+        st = ' style="opacity:.6;font-weight:800"' if href == active else ''
+        return f'<a href="{href}"{st}>{txt}</a>'
+    nav = ('<nav class="nav"><div class="in"><b>🏠 Observatorio de la vivienda</b>'
+           + na("/", "Observatorio") + na("/fuentes.html", "Fuentes") + na("/propiedad.html", "Propiedad")
+           + '<a href="https://pruebapublica.com" style="opacity:.7">pruebapublica.com</a></div></nav>')
+    return f"""<!doctype html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{E(titulo)}</title><meta name="description" content="{E(desc)}">
+<link rel="canonical" href="{canonical}"><meta name="robots" content="index, follow">
+<style>{CSS}</style></head><body>
+{nav}
+<header class="hero"><div class="wrap"><h1>{h1}</h1><p>{intro}</p></div></header>
+<main>{body}</main>
+<footer>Observatorio de la vivienda · <a href="https://pruebapublica.com">pruebapublica.com</a> · datos de fuentes públicas · <a href="/fuentes.html">Fuentes y auditoría</a></footer>
+</body></html>"""
+
+
 def _fuentes_html():
     filas = "".join(
         f'<tr><td><b>{E(n)}</b></td><td>{E(q)}<br><span class="mut" style="font-size:.78rem">{E(d)}</span></td>'
         f'<td><code style="font-size:.72rem;word-break:break-all">{E(ep)}</code></td><td>{E(per)}<br><span class="mut" style="font-size:.78rem">{E(lic)}</span></td>'
         f'<td><a href="{E(link)}" target="_blank" rel="noopener">ver ↗</a></td></tr>'
         for n, q, d, ep, per, lic, link in SOURCES)
-    return f"""<!doctype html><html lang="es"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Fuentes y auditoría — Observatorio de la vivienda</title>
-<meta name="description" content="Fuentes oficiales (INE, CGPJ, BOE, VIA), endpoint exacto, periodicidad y cómo se verifica cada dato. Auditoría de fuentes.">
-<link rel="canonical" href="https://vivienda.pruebapublica.com/fuentes.html">
-<meta name="robots" content="index, follow">
-<style>
-:root{{--ink:#0f172a;--mut:#64748b;--accent:#0f766e;--line:#e2e8f0;--bg:#f8fafc}}
-*{{box-sizing:border-box}} body{{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.6}}
-.hero{{background:linear-gradient(135deg,#0f766e,#0e7490);color:#fff;padding:34px 20px}} .wrap{{max-width:1040px;margin:0 auto;padding:0 20px}}
-.hero h1{{margin:0;font-size:1.7rem}} .hero p{{margin:6px 0 0;opacity:.92}}
-main{{max-width:1040px;margin:0 auto;padding:24px 20px 60px}}
-h2{{font-size:1.15rem;margin:28px 0 10px}} table{{width:100%;border-collapse:collapse;font-size:.85rem;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden}}
-th{{text-align:left;padding:9px 10px;background:#f1f5f9;color:var(--mut);font-size:.74rem;text-transform:uppercase}} td{{padding:9px 10px;border-top:1px solid var(--line);vertical-align:top}}
-code{{background:#f1f5f9;padding:1px 4px;border-radius:4px}} .mut{{color:var(--mut)}} a{{color:var(--accent)}}
-.panel{{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px 18px}}
-</style></head><body>
-<header class="hero"><div class="wrap"><h1>Fuentes y auditoría</h1>
-<p>Qué datos usamos, de dónde salen exactamente, cada cuánto se actualizan y cómo se verifican.</p></div></header>
-<main>
-<h2>1. Fuentes (todas oficiales y abiertas, salvo VIA)</h2>
-<p class="mut" style="font-size:.85rem">Cada cifra del observatorio procede de una de estas fuentes. Se accede por su <b>API o fichero público</b>; el endpoint exacto se indica para poder reproducirlo.</p>
-<table><thead><tr><th>Fuente</th><th>Qué aporta</th><th>Endpoint (reproducible)</th><th>Periodicidad / licencia</th><th></th></tr></thead>
-<tbody>{filas}</tbody></table>
-
+    body = f'''<h2>1. Fuentes (todas oficiales y abiertas, salvo VIA)</h2>
+<div class="panel"><table><thead><tr><th>Fuente</th><th>Qué aporta</th><th>Endpoint (reproducible)</th><th>Periodicidad / licencia</th><th></th></tr></thead><tbody>{filas}</tbody></table>
+<p class="mut" style="font-size:.8rem">Cada cifra procede de una de estas fuentes, por su API o fichero público. El endpoint exacto se indica para poder reproducirlo.</p></div>
 <h2>2. Cómo se obtiene y se verifica</h2>
 <div class="panel"><ul>
-<li><b>Ingesta directa</b> de las APIs/ficheros anteriores (sin intermediarios): los valores se guardan <b>tal cual</b> en <code>data/vivienda.db</code>.</li>
-<li><b>Reproducible</b>: cualquiera puede llamar al mismo endpoint y comparar. Los módulos de ingesta son públicos (<code>ingest/</code>).</li>
-<li><b>Reconstrucción diaria</b> por cron: los datos se refrescan solos cuando la fuente publica.</li>
-<li><b>Sin edición de cifras</b>: el generador solo ordena y agrega; no altera valores ni los mezcla entre fuentes distintas.</li>
-<li><b>Fecha visible</b>: cada indicador lleva su periodo (p. ej. «26-T1», «2025»).</li>
+<li><b>Ingesta directa</b> de las APIs/ficheros (sin intermediarios); los valores se guardan <b>tal cual</b> en <code>data/vivienda.db</code>.</li>
+<li><b>Reproducible</b>: cualquiera puede llamar al mismo endpoint y comparar. Módulos públicos (<code>ingest/</code>).</li>
+<li><b>Reconstrucción diaria</b> por cron; <b>sin editar cifras</b> (solo ordena y agrega); <b>fecha visible</b> en cada indicador.</li>
 </ul></div>
-
 <h2>3. Trazabilidad por sección</h2>
 <div class="panel"><ul>
-<li>Indicadores y gráfico de precio → <b>INE (IPV)</b>.</li>
-<li>Alquiler (índice) → <b>INE (IPVA)</b>.</li>
-<li>Ejecuciones hipotecarias → <b>INE (EH)</b>.</li>
-<li>Lanzamientos (desahucios) → <b>CGPJ</b>.</li>
-<li>Viviendas turísticas → <b>INE (VTE)</b>.</li>
-<li>Precio del alquiler por municipio / mapa → <b>VIA</b> (anuncios; indicativo).</li>
-<li>Decretos → <b>BOE</b> (sumario diario).</li>
+<li>Precio (IPV) · alquiler índice (IPVA) · ejecuciones (EH) · turísticas (VTE) → <b>INE</b>.</li>
+<li>Lanzamientos (desahucios) → <b>CGPJ</b>. Decretos → <b>BOE</b>. Alquiler por municipio / mapa → <b>VIA</b>.</li>
 </ul></div>
-
 <h2>4. Límites de la auditoría</h2>
 <div class="panel"><ul>
-<li><b>Etiquetas y licencias de reutilización</b> de INE/CGPJ/MIVAU: por confirmar (uso citando fuente).</li>
-<li><b>Momentos distintos</b>: precios notariales, registros, alquiler fiscal y lanzamientos miden periodos distintos → <b>no se combinan</b> en un mismo gráfico.</li>
-<li><b>VIA no es serie oficial</b> (precios de oferta): se marca como indicativo.</li>
-<li>El observatorio <b>no interpreta</b> causalidad: muestra hechos y su fuente.</li>
+<li><b>Licencias</b> de reutilización INE/CGPJ/MIVAU: por confirmar (uso citando fuente).</li>
+<li><b>Momentos distintos</b>: precios, registros, alquiler fiscal y lanzamientos no se combinan en un mismo gráfico.</li>
+<li><b>VIA no es serie oficial</b> (precios de oferta): indicativo. El observatorio <b>no interpreta causalidad</b>.</li>
 </ul></div>
-<p class="mut" style="font-size:.8rem">Última revisión: {date.today().isoformat()} · <a href="/">← volver al observatorio</a></p>
-</main></body></html>"""
+<p class="mut" style="font-size:.8rem">Última revisión: {date.today().isoformat()}</p>'''
+    return _shell("Fuentes y auditoría — Observatorio de la vivienda",
+                  "Fuentes oficiales (INE, CGPJ, BOE, VIA), endpoint exacto, periodicidad y cómo se verifica cada dato.",
+                  "https://vivienda.pruebapublica.com/fuentes.html", "Fuentes y auditoría",
+                  "Qué datos usamos, de dónde salen exactamente, cada cuánto se actualizan y cómo se verifican.", body, active="/fuentes.html")
 
 
 
@@ -210,57 +218,35 @@ def _propiedad_html(rows, v):
         d[_prov(p, c)] += (a or 0)
     of = sorted(d.items(), key=lambda x: -x[1])
     total_of = sum(d.values())
-    return f"""<!doctype html><html lang="es"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Propiedad, tenedores y oferta — Observatorio de la vivienda</title>
-<meta name="description" content="Oferta de alquiler (anuncios activos), concentración de la propiedad y grandes tenedores: qué se puede medir en abierto y qué no.">
-<link rel="canonical" href="https://vivienda.pruebapublica.com/propiedad.html">
-<meta name="robots" content="index, follow">
-<style>
-:root{{--ink:#0f172a;--mut:#64748b;--accent:#7c3aed;--line:#e2e8f0;--bg:#f8fafc}}
-*{{box-sizing:border-box}} body{{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.6}}
-.hero{{background:linear-gradient(135deg,#6d28d9,#7c3aed 60%,#9333ea);color:#fff;padding:34px 20px}} .wrap{{max-width:1040px;margin:0 auto;padding:0 20px}}
-.hero h1{{margin:0;font-size:1.7rem}} .hero p{{margin:6px 0 0;opacity:.94}}
-main{{max-width:1040px;margin:0 auto;padding:24px 20px 60px}} h2{{font-size:1.15rem;margin:28px 0 10px}}
-.panel{{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px 20px}} .mut{{color:var(--mut)}} a{{color:var(--accent)}}
-table{{width:100%;border-collapse:collapse;font-size:.85rem}} th{{text-align:left;padding:8px 10px;background:#f1f5f9;color:var(--mut);font-size:.74rem;text-transform:uppercase}} td{{padding:8px 10px;border-top:1px solid var(--line)}}
-code{{background:#f1f5f9;padding:1px 4px;border-radius:4px}} .box{{margin:12px 0;padding:12px 16px;background:#fffbeb;border-left:4px solid #d97706;border-radius:6px;font-size:.88rem}}
-</style></head><body>
-<header class="hero"><div class="wrap"><h1>¿Quién tiene la vivienda?</h1>
-<p>Oferta de alquiler, concentración de la propiedad y grandes tenedores. Qué se puede medir con datos abiertos y qué no.</p></div></header>
-<main>
-<h2>1. Oferta de alquiler <span class="mut" style="font-weight:400;font-size:.85rem">· anuncios activos (VIA)</span></h2>
-<div class="panel">
-{bloque_barras(of, color="#7c3aed", fmt=lambda x: f"{int(x):,}".replace(",", "."), unidad="")}
-<p class="mut" style="font-size:.8rem">Nº de <b>anuncios de alquiler activos</b> por provincia. Total: <b>{f"{total_of:,}".replace(",", ".")}</b> anuncios en {len([1 for _ in of if _[1]>0])} provincias. Fuente: <b>VIA</b> (anuncios de portales; <b>indicativo</b>, no serie oficial). Datos a {E(str(v["fecha"]))}.</p></div>
-
+    body = f'''<h2>1. Oferta de alquiler <span>· anuncios activos (VIA)</span></h2>
+<div class="panel">{bloque_barras(of, color="#7c3aed", fmt=lambda x: f"{int(x):,}".replace(",", "."), unidad="")}
+<p class="mut" style="font-size:.8rem">Nº de <b>anuncios de alquiler activos</b> por provincia. Total: <b>{f"{total_of:,}".replace(",", ".")}</b> anuncios. Fuente: <b>VIA</b> (anuncios de portales; <b>indicativo</b>, no serie oficial). Datos a {E(str(v["fecha"]))}.</p></div>
 <h2>2. Concentración de la propiedad (propietarios por nº de viviendas)</h2>
 <div class="panel">
-<div class="box">⚠️ <b>No hay fuente oficial abierta</b> que publique, de forma nominal y actualizada, cuántos propietarios tienen 1, 2, 5, 10 o 20 viviendas. El <b>Catastro</b> y el <b>Registro de la Propiedad</b> tienen esos datos, pero <b>no los publican agregados</b> (privacidad/RGPD). Por eso <b>no lo medimos aquí</b>: hacerlo exigiría datos privados.</div>
+<div class="box">⚠️ <b>No hay fuente oficial abierta</b> que publique, de forma nominal y actualizada, cuántos propietarios tienen 1, 2, 5, 10 o 20 viviendas. El <b>Catastro</b> y el <b>Registro de la Propiedad</b> tienen el dato pero <b>no lo publican agregado</b> (privacidad/RGPD). Por eso <b>no lo medimos</b>.</div>
 <p style="font-size:.9rem">Dónde SÍ se publican aproximaciones (estudios, no datasets actualizables):</p>
 <ul style="font-size:.9rem">
-<li><b>Colegio de Registradores</b> — «Anuario Registral» / «Panorama Registral»: distribución de la propiedad y grandes titulares. <a href="https://www.registradores.org/actualidad/portal-estadistico-registral" target="_blank" rel="noopener">portal estadístico ↗</a></li>
-<li><b>Banco de España</b> — artículos y boletines sobre mercado de la vivienda y tenedores institucionales. <a href="https://www.bde.es/" target="_blank" rel="noopener">bde.es ↗</a></li>
-<li><b>AEAT</b> — «Mercado del Alquiler de Viviendas»: nº de arrendadores, viviendas y rendimientos (anual, Excel). <a href="https://sede.agenciatributaria.gob.es/" target="_blank" rel="noopener">sede AEAT ↗</a></li>
+<li><b>Colegio de Registradores</b> — «Anuario/Panorama Registral» (distribución de la propiedad). <a href="https://www.registradores.org/actualidad/portal-estadistico-registral" target="_blank" rel="noopener">portal estadístico ↗</a></li>
+<li><b>Banco de España</b> — boletines sobre vivienda y tenedores institucionales. <a href="https://www.bde.es/" target="_blank" rel="noopener">bde.es ↗</a></li>
+<li><b>AEAT</b> — «Estadística de viviendas declaradas en IRPF» (arrendadores, viviendas, alquiler medio; anual). <a href="https://sede.agenciatributaria.gob.es/Sede/estadisticas/estadisticas-impuesto/estadistica-viviendas-declaradas-irpf.html" target="_blank" rel="noopener">visor AEAT ↗</a></li>
 </ul></div>
-
 <h2>3. Grandes tenedores institucionales (SOCIMIs)</h2>
-<div class="panel">
-<p style="font-size:.9rem">Los «fondos buitre» <b>no son una categoría registral</b>; muchos operan vía <b>SOCIMIs</b> (sociedades cotizadas de inversión inmobiliaria), cuyos datos <b>sí</b> se publican.</p>
+<div class="panel"><p style="font-size:.9rem">Los «fondos buitre» <b>no son una categoría registral</b>; muchos operan vía <b>SOCIMIs</b>, cuyos datos <b>sí</b> se publican.</p>
 <ul style="font-size:.9rem">
-<li><b>CNMV</b> — registro y datos de SOCIMIs. <a href="https://www.cnmv.es/portal/consultas/busquedaemisores" target="_blank" rel="noopener">CNMV ↗</a></li>
-<li><b>BME / Bolsas</b> — SOCIMIs cotizadas. <a href="https://www.bolsasymercados.es/" target="_blank" rel="noopener">BME ↗</a></li>
+<li><b>CNMV</b> — <a href="https://www.cnmv.es/portal/consultas/busquedaemisores" target="_blank" rel="noopener">registro de emisores/SOCIMIs ↗</a></li>
+<li><b>BME</b> — <a href="https://www.bolsasymercados.es/" target="_blank" rel="noopener">SOCIMIs cotizadas ↗</a></li>
 </ul>
-<p class="mut" style="font-size:.8rem">Pendiente: conectable (número + activos), pero no hay API abierta; requiere descarga y parser del registro/tablas de CNMV/BME.</p></div>
-
+<p class="mut" style="font-size:.8rem">Pendiente (no automatizable con fiabilidad): sin API/CSV abierto.</p></div>
 <h2>4. Límites de esta pestaña</h2>
 <div class="panel"><ul style="font-size:.9rem">
-<li><b>Oferta</b> = anuncios activos (oferta, no demanda). La <b>demanda</b> solo se estima por encuestas (BdE/CIS), no es actualizable.</li>
-<li><b>Propietarios por tramos</b>: no medible en abierto (declarado arriba).</li>
-<li><b>Tenencia institucional</b>: solo aproximable vía SOCIMIs; el resto (fondos no cotizados) no es público.</li>
-</ul></div>
-<p class="mut" style="font-size:.8rem">Última revisión: {date.today().isoformat()} · <a href="/">← volver al observatorio</a> · <a href="/fuentes.html">Fuentes y auditoría</a></p>
-</main></body></html>"""
+<li><b>Oferta</b> = anuncios activos (oferta, no demanda). La <b>demanda</b> solo se estima por encuestas (BdE/CIS).</li>
+<li><b>Propietarios por tramos</b>: no medible en abierto. <b>Tenencia institucional</b>: solo vía SOCIMIs.</li>
+</ul></div>'''
+    return _shell("Propiedad, tenedores y oferta — Observatorio de la vivienda",
+                  "Oferta de alquiler (anuncios activos), concentración de la propiedad y grandes tenedores: qué se mide en abierto y qué no.",
+                  "https://vivienda.pruebapublica.com/propiedad.html", "¿Quién tiene la vivienda?",
+                  "Oferta de alquiler, concentración de la propiedad y grandes tenedores. Qué se puede medir con datos abiertos y qué no.", body, active="/propiedad.html")
+
 
 
 def bloque_barras(pares, color, fmt=None, unidad="", top=10):
