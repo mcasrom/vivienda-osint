@@ -110,6 +110,22 @@ def _tendencia(serie):
     return "estable", ""
 
 
+
+def bloque_barras(pares, color, fmt=None, unidad="", top=10):
+    """Top-N barras + desplegable con la lista completa (no se pierde detalle)."""
+    if not pares:
+        return "<p class='mut'>sin datos</p>"
+    top_pares = pares[:top]
+    grafico = svg_bars(top_pares, color=color, h=max(150, len(top_pares) * 26), fmt=fmt, unidad=unidad)
+    if len(pares) > top:
+        filas = "".join(
+            f'<tr><td>{E(k)}</td><td class="num">{fmt(v) if fmt else _eur(v)}</td></tr>' for k, v in pares)
+        det = ('<details style="margin-top:10px"><summary style="cursor:pointer;font-weight:600;font-size:.82rem;color:var(--ink)">'
+               f'Ver las {len(pares)} comunidades</summary><table style="margin-top:8px"><tbody>{filas}</tbody></table></details>')
+        grafico += det
+    return grafico
+
+
 def _ind(valor, unidad, tend, etq_tend, fuente, periodo):
     cls = {"subiendo": "up", "bajando": "down", "estable": ""}.get(tend, "")
     fl = {"subiendo": "▲", "bajando": "▼", "estable": "▬"}.get(tend, "")
@@ -345,7 +361,7 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 
 <h2>Ejecuciones hipotecarias de vivienda por CCAA <span>· INE{f" · {eh_anyo}" if eh_anyo else ""}</span></h2>
 <div class="panel">
-{svg_bars(eh, color="#0f766e", h=max(180, len(eh)*27), fmt=lambda v: f"{int(v):,}".replace(",", "."), unidad="")}
+{bloque_barras(eh, color="#0f766e", fmt=lambda v: f"{int(v):,}".replace(",", "."), unidad="")}
 <p style="font-size:.85rem;margin:18px 0 2px"><b>Cronología nacional</b> · viviendas con ejecución iniciada, por año</p>
 {svg_line([(str(a), v) for a, v in eh_nac], color="#0f766e", fmt=lambda v: f"{int(v):,}".replace(",", "."))}
 <p class="mut" style="font-size:.8rem">Ejecuciones hipotecarias <b>iniciadas sobre vivienda</b>, por CCAA. <b>Total nacional {eh_tot_txt}</b>. Fuente: <a href="https://www.ine.es/">INE</a>.</p>
@@ -353,14 +369,14 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 
 <h2>Lanzamientos (desahucios) por CCAA <span>· CGPJ{f" · {lz_per}" if lz_per else ""}</span></h2>
 <div class="panel">
-{svg_bars(lz, color="#c2410c", h=max(180, len(lz)*27), fmt=lambda v: f"{int(v):,}".replace(",", "."), unidad="")}
+{bloque_barras(lz, color="#c2410c", fmt=lambda v: f"{int(v):,}".replace(",", "."), unidad="")}
 <p style="font-size:.85rem;margin:18px 0 2px"><b>Cronología nacional</b> · lanzamientos por trimestre</p>
 {svg_line([(str(a), v) for a, v in lz_serie], color="#c2410c", fmt=lambda v: f"{int(v):,}".replace(",", "."))}
 <p class="mut" style="font-size:.8rem">Lanzamientos <b>practicados</b> (desalojo), por CCAA. Total {lz_per}: <b>{lz_tot_txt}</b>. Fuente: <a href="https://www.poderjudicial.es/">CGPJ</a> (trimestral).</p></div>
 
 <h2>Viviendas turísticas por CCAA <span>· INE{f" · {vut_anyo}" if vut_anyo else ""}</span></h2>
 <div class="panel">
-{svg_bars(vut, color="#7c3aed", h=max(180, len(vut)*27), fmt=lambda v: f"{int(v):,}".replace(",", "."), unidad="")}
+{bloque_barras(vut, color="#7c3aed", fmt=lambda v: f"{int(v):,}".replace(",", "."), unidad="")}
 <p class="mut" style="font-size:.8rem">Viviendas de uso turístico (VUT). Total nacional: <b>{vut_tot_txt}</b>{" · " + f"{vut_pct:.2f} %" if vut_pct else ""} del total de viviendas censadas. Fuente: <a href="https://www.ine.es/">INE</a> (Estadística de Viviendas Turísticas).</p></div>
 
 <h2 id="control">Punto de control · decretos de sep–oct 2026</h2>
