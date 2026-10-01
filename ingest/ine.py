@@ -1,46 +1,69 @@
-"""Ingesta INE: IPVA (Índice de Precios de Vivienda). Serie nacional (índice + variación anual).
-
-Fuente: INE wstempus (datos abiertos). Guarda en data/vivienda.db.
+"""Ingesta INE (datos abiertos wstempus):
+  · IPVA (tabla 59056): Índice de Precios de Vivienda (compraventa) nacional.
+  · IPV  (tabla 80270): precios por CCAA (variación anual, trimestral).
+Guarda series en data/vivienda.db.
 """
 from __future__ import annotations
 import os, json, sqlite3, urllib.request
 
-TABLA = 59056  # IPVA: índices nacionales y por CCAA
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB = os.path.join(ROOT, "data", "vivienda.db")
+TABLAS = {"ipva": 59056, "ipv": 80270}
 
 
 def _con():
     c = sqlite3.connect(DB)
+    cols = [r[1] for r in c.execute("PRAGMA table_info(ine_serie)").fetchall()]
+    if cols and cols != ["serie", "fecha", "etiqueta", "valor"]:
+        c.execute("DROP TABLE ine_serie")
     c.execute("""CREATE TABLE IF NOT EXISTS ine_serie(
-        serie TEXT, anyo INTEGER, valor REAL, PRIMARY KEY(serie, anyo))""")
+        serie TEXT, fecha TEXT, etiqueta TEXT, valor REAL, PRIMARY KEY(serie, fecha))""")
     return c
 
 
-def _get(url):
-    req = urllib.request.Request(url, headers={"User-Agent": "vivienda-osint/0.1 (+pruebapublica.com)"})
-    return json.load(urllib.request.urlopen(req, timeout=40))
+def _get(u):
+    req = urllib.request.Request(u, headers={"User-Agent": "vivienda-osint/0.1 (+pruebapublica.com)"})
+    return json.load(urllib.request.urlopen(req, timeout=45))
+
+
+def _etq(x):
+    a = x.get("Anyo")
+    p = (x.get("T3_Periodo") or "").upper()
+    # trimestral: T1..T4 -> letra Q
+    if p in ("T1", "T2", "T3", "T4"):
+        return f"{a} {p[1]}T"
+    return str(a)
 
 
 def ingest() -> int:
-    d = _get(f"https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA/{TABLA}?nult=25&tip=AM")
     c = _con()
     n = 0
-    for s in d:
+    # IPVA (nacional: índice + variación anual)
+    for s in _get(f"https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA/{TABLAS['ipva']}?nult=25&tip=AM"):
         nom = s.get("Nombre", "")
-        if nom.startswith("Total Nacional. Total. Índice"):
-            serie = "ipva_indice"
-        elif nom.startswith("Total Nacional. Total. Variación anual"):
-            serie = "ipva_var_anual"
-        else:
+        key = ("ipva_indice" if nom.startswith("Total Nacional. Total. Índice")
+               else "ipva_var_anual" if nom.startswith("Total Nacional. Total. Variación anual") else None)
+        if not key:
             continue
         for x in s.get("Data", []):
-            v = x.get("Valor")
-            a = x.get("Anyo")
-            if v is None or a is None:
+            if x.get("Valor") is None:
                 continue
-            cur = c.execute("INSERT OR REPLACE INTO ine_serie(serie,anyo,valor) VALUES(?,?,?)", (serie, int(a), float(v)))
-            n += cur.rowcount
+            n += c.execute("INSERT OR REPLACE INTO ine_serie VALUES(?,?,?,?)",
+                           (key, x.get("Fecha", "")[:10], _etq(x), float(x["Valor"]))).rowcount
+    # IPV (compraventa, nacional general)
+    for s in _get(f"https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA/{TABLAS['ipv']}?nult=12&tip=AM"):
+        nom = s.get("Nombre", "")
+        key = ("ipv_indice" if nom == "Nacional. General. Índice. "
+               else "ipv_var_anual" if nom == "Nacional. General. Variación anual. "
+               else "ipv_nueva_var" if nom == "Nacional. Vivienda nueva. Variación anual. "
+               else "ipv_segunda_var" if nom == "Nacional. Vivienda de segunda mano. Variación anual. " else None)
+        if not key:
+            continue
+        for x in s.get("Data", []):
+            if x.get("Valor") is None:
+                continue
+            n += c.execute("INSERT OR REPLACE INTO ine_serie VALUES(?,?,?,?)",
+                           (key, x.get("Fecha", "")[:10], _etq(x), float(x["Valor"]))).rowcount
     c.commit()
     return n
 
@@ -48,9 +71,14 @@ def ingest() -> int:
 def serie(nombre: str):
     try:
         c = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
-        return c.execute("SELECT anyo, valor FROM ine_serie WHERE serie=? ORDER BY anyo", (nombre,)).fetchall()
+        return c.execute("SELECT etiqueta, valor FROM ine_serie WHERE serie=? ORDER BY fecha", (nombre,)).fetchall()
     except Exception:
         return []
+
+
+def ultimo(nombre: str):
+    s = serie(nombre)
+    return s[-1][1] if s else None
 
 
 if __name__ == "__main__":
