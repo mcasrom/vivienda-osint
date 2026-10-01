@@ -4,7 +4,7 @@ Estructura: Indicadores · IPV · Alquiler · Mapa de calor provincial · Compar
 Calendario · Registro de medidas · Método y límites. Sin puntuaciones compuestas.
 """
 from __future__ import annotations
-import os, sys, sqlite3, html, json, json
+import os, sys, sqlite3, html, json, csv
 from datetime import date
 from collections import defaultdict
 
@@ -13,6 +13,7 @@ sys.path.insert(0, ROOT)
 from ingest import boe as boeing, via, ine, cgpj  # noqa: E402
 
 OUT = os.path.join(ROOT, "web", "index.html")
+DATA_DIR = os.path.join(ROOT, "web", "data")
 E = html.escape
 
 # Registro de medidas (se anotan sobre las series; NO se afirma causalidad).
@@ -133,6 +134,37 @@ def _etq_nivel(t):
     return {"subiendo": "subiendo", "bajando": "bajando", "estable": "estable"}.get(t, "")
 
 
+def _prov_agg(rows):
+    """{provincia: (mediana €/m², nº de municipios)} a partir de los anuncios VIA."""
+    prov = defaultdict(list)
+    for m, p, e, a, s, c in rows:
+        if e:
+            prov[_prov(p, c)].append(e)
+    return {k: (sorted(v)[len(v) // 2], len(v)) for k, v in prov.items()}
+
+
+def _write_dataset(did, titulo, fuente, periodo, licencia, headers, records, datasets):
+    """Escribe <did>.csv y <did>.json (UTF-8) y registra el catálogo."""
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(os.path.join(DATA_DIR, did + ".csv"), "w", encoding="utf-8", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(headers)
+        for r in records:
+            w.writerow([r.get(h, "") for h in headers])
+    with open(os.path.join(DATA_DIR, did + ".json"), "w", encoding="utf-8") as f:
+        json.dump({"id": did, "titulo": titulo, "fuente": fuente, "periodo": periodo,
+                   "licencia": licencia, "columnas": headers, "datos": records},
+                  f, ensure_ascii=False, indent=1)
+    datasets.append({"id": did, "titulo": titulo, "fuente": fuente,
+                     "periodo": periodo, "licencia": licencia, "n": len(records)})
+
+
+def _descarga(did):
+    """Enlaces de descarga CSV/JSON para una sección."""
+    return (f'<p class="mut" style="font-size:.78rem;margin:8px 0 0">Descargar: '
+            f'<a href="/data/{did}.csv">CSV</a> · <a href="/data/{did}.json">JSON</a></p>')
+
+
 
 
 SOURCES = [
@@ -187,6 +219,7 @@ def _shell(titulo, desc, canonical, h1, intro, body, active=""):
         return f'<a href="{href}"{st}>{txt}</a>'
     nav = ('<nav class="nav"><div class="in"><b>🏠 Observatorio de la vivienda</b>'
            + na("/", "Observatorio") + na("/fuentes.html", "Fuentes") + na("/propiedad.html", "Propiedad")
+           + na("/datos.html", "Datos")
            + '<a href="https://pruebapublica.com" style="opacity:.7">pruebapublica.com</a></div></nav>')
     return f"""<!doctype html><html lang="es"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -232,6 +265,28 @@ def _fuentes_html():
                   "https://vivienda.pruebapublica.com/fuentes.html", "Fuentes y auditoría",
                   "Qué datos usamos, de dónde salen exactamente, cada cuánto se actualizan y cómo se verifican.", body, active="/fuentes.html")
 
+
+
+def _datos_html(datasets):
+    filas = "".join(
+        f'<tr><td><b>{E(d["titulo"])}</b><br><span class="mut" style="font-size:.78rem">{E(d["fuente"])}</span></td>'
+        f'<td>{E(d["periodo"])}<br><span class="mut" style="font-size:.78rem">{d["n"]} filas · {E(d["licencia"])}</span></td>'
+        f'<td><a href="/data/{d["id"]}.csv">CSV</a> · <a href="/data/{d["id"]}.json">JSON</a></td></tr>'
+        for d in datasets)
+    body = f'''<h2>1. Catálogo de datos (descarga por serie)</h2>
+<div class="panel"><table><thead><tr><th>Serie</th><th>Periodo / licencia</th><th>Descarga</th></tr></thead><tbody>{filas}</tbody></table>
+<p class="mut" style="font-size:.8rem">Cada serie se publica como <b>CSV</b> (UTF-8, separado por comas, punto decimal) y <b>JSON</b>. Los ficheros se regeneran con la página; el endpoint de cada fuente está en <a href="/fuentes.html">Fuentes</a>.</p></div>
+<h2>2. Cómo citar</h2>
+<div class="panel"><p style="font-size:.9rem">Observatorio de la vivienda (pruebapublica.com). Datos de INE, CGPJ, BOE y VIA (indicativo). Citando la fuente original y este observatorio.</p></div>
+<h2>3. Límites</h2>
+<div class="panel"><ul style="font-size:.9rem">
+<li>Las cifras son <b>tal cual</b> las publica cada organismo, agregadas cuando la serie es por CCAA/provincia.</li>
+<li><b>VIA</b> es indicativo (anuncios), no serie oficial. Licencias de reutilización INE/CGPJ/BOE: reutilización con cita.</li>
+</ul></div>'''
+    return _shell("Datos — Observatorio de la vivienda",
+                  "Descarga en CSV y JSON de cada serie: precios (INE), alquiler, ejecuciones, lanzamientos (CGPJ) y viviendas turísticas.",
+                  "https://vivienda.pruebapublica.com/datos.html", "Datos y descargas",
+                  "Todas las series del observatorio, listas para reutilizar: CSV y JSON con su fuente y periodo.", body, active="/datos.html")
 
 
 def _propiedad_html(rows, v):
@@ -355,11 +410,7 @@ def _eurp(v):
 
 def heatmap_provincias(rows, w=780):
     """Rejilla de provincias coloreada por mediana €/m² (escala de un solo tono)."""
-    prov = defaultdict(list)
-    for m, p, e, a, s, c in rows:
-        if e:
-            prov[_prov(p, c)].append(e)
-    dat = sorted(((p, sorted(v)[len(v) // 2]) for p, v in prov.items()), key=lambda x: -x[1])
+    dat = sorted(((p, med) for p, (med, _n) in _prov_agg(rows).items()), key=lambda x: -x[1])
     if not dat:
         return "<p class='mut'>sin datos</p>"
     mx = max(v for _, v in dat) or 1
@@ -500,6 +551,69 @@ def build():
         + (f'<a class="src" href="{E(u)}" target="_blank" rel="noopener">BOE ↗</a>' if u else "")
         + "</div>" for f, t, u, dep, amb in boe_rows)
 
+    # --- exportaciones CSV/JSON (por serie) ---
+    datasets = []
+
+    def _idx(serie):
+        return {e: v for e, v in serie}
+
+    ipv_idx, ipv_nv, ipv_sg = _idx(ine.serie("ipv_indice")), _idx(ine.serie("ipv_nueva_var")), _idx(ine.serie("ipv_segunda_var"))
+    _write_dataset("precios-ipv", "Precio de compraventa (IPV), variación anual", "INE · tabla 80270",
+                   "trimestral", "INE — reutilización citando fuente",
+                   ["periodo", "variacion_anual", "variacion_nueva", "variacion_segunda", "indice"],
+                   [{"periodo": e, "variacion_anual": v, "variacion_nueva": ipv_nv.get(e, ""),
+                     "variacion_segunda": ipv_sg.get(e, ""), "indice": ipv_idx.get(e, "")} for e, v in ipv], datasets)
+    ipva_idx = _idx(ipva)
+    _write_dataset("alquiler-ipva", "Índice de precios del alquiler (IPVA)", "INE · tabla 59056",
+                   "anual (experimental, base fiscal)", "INE — reutilización citando fuente",
+                   ["periodo", "variacion_anual", "indice"],
+                   [{"periodo": e, "variacion_anual": v, "indice": ipva_idx.get(e, "")} for e, v in ipva_s], datasets)
+    _write_dataset("ejecuciones-hipotecarias-ccaa", "Ejecuciones hipotecarias de vivienda por CCAA",
+                   "INE · tabla 10740", str(eh_anyo) if eh_anyo else "—", "INE — reutilización citando fuente",
+                   ["ccaa", "ejecuciones"], [{"ccaa": k, "ejecuciones": int(v)} for k, v in eh], datasets)
+    _write_dataset("ejecuciones-hipotecarias-nacional", "Ejecuciones hipotecarias de vivienda (nacional)",
+                   "INE · tabla 10740", "anual", "INE — reutilización citando fuente",
+                   ["anio", "ejecuciones"], [{"anio": a, "ejecuciones": int(v)} for a, v in eh_nac], datasets)
+    _write_dataset("lanzamientos-ccaa", "Lanzamientos (desahucios) por CCAA", "CGPJ · Efecto de la crisis",
+                   per_lz, "CGPJ — datos judiciales públicos",
+                   ["ccaa", "lanzamientos"], [{"ccaa": k, "lanzamientos": int(v)} for k, v in lz], datasets)
+    _write_dataset("lanzamientos-cronologia", "Lanzamientos (desahucios) nacionales por trimestre",
+                   "CGPJ · Efecto de la crisis",
+                   f"{lz_serie[0][0]}–{lz_serie[-1][0]}" if lz_serie else "—", "CGPJ — datos judiciales públicos",
+                   ["periodo", "lanzamientos"], [{"periodo": p, "lanzamientos": int(v)} for p, v in lz_serie], datasets)
+    _write_dataset("viviendas-turisticas-ccaa", "Viviendas de uso turístico por CCAA", "INE · tabla 46141",
+                   str(vut_anyo) if vut_anyo else "—", "INE — reutilización citando fuente",
+                   ["ccaa", "viviendas_turisticas"],
+                   [{"ccaa": k, "viviendas_turisticas": int(v)} for k, v in vut], datasets)
+    pagg = _prov_agg(rows)
+    _write_dataset("alquiler-provincia-via", "Alquiler por provincia (mediana de municipios VIA)",
+                   "VIA (anuncios)", str(v["fecha"]), "propia — indicativo, no serie oficial",
+                   ["provincia", "eur_m2_mediana", "municipios"],
+                   [{"provincia": k, "eur_m2_mediana": round(med, 2), "municipios": n}
+                    for k, (med, n) in sorted(pagg.items(), key=lambda x: -x[1][0])], datasets)
+    _write_dataset("boe-vivienda", "Disposiciones generales del BOE sobre vivienda",
+                   "BOE · sumario diario (sección I)", "diaria (últimos 21 días)", "BOE — reutilización citando fuente",
+                   ["fecha", "ambito", "departamento", "titulo", "url"],
+                   [{"fecha": f, "ambito": amb, "departamento": dep, "titulo": t, "url": u}
+                    for f, t, u, dep, amb in boe_all], datasets)
+    ctrl_rows = []
+    for k, tp, tt, src in _IND:
+        rv, rp = _vp(b0.get(k)); uv, up = _vp(ind_now.get(k))
+        ctrl_rows.append({"indicador": tt, "referencia": rv, "periodo_referencia": rp,
+                          "ultimo": uv, "periodo_ultimo": up, "fuente": src})
+    _write_dataset("punto-control", "Punto de control (referencia vs último dato)",
+                   "varias (INE/CGPJ/VIA)", "ver columnas de periodo", "varias — ver fuente",
+                   ["indicador", "referencia", "periodo_referencia", "ultimo", "periodo_ultimo", "fuente"],
+                   ctrl_rows, datasets)
+    with open(os.path.join(DATA_DIR, "index.json"), "w", encoding="utf-8") as f:
+        json.dump({"observatorio": "Observatorio de la vivienda",
+                   "url": "https://vivienda.pruebapublica.com/", "generado": hoy, "series": datasets},
+                  f, ensure_ascii=False, indent=1)
+    distrib_json = json.dumps(
+        [{"@type": "DataDownload", "name": d["titulo"], "encodingFormat": "text/csv",
+          "contentUrl": f"https://vivienda.pruebapublica.com/data/{d['id']}.csv"} for d in datasets],
+        ensure_ascii=False)
+
     doc = f"""<!doctype html><html lang="es"><head><meta charset="utf-8">
 <meta name="google-site-verification" content="mlyuKtDMOhZ2x2lMrqr-MHT9LeUW8i6uEJw1Sv6AzNY">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -526,6 +640,7 @@ def build():
 "description":"Datos oficiales de vivienda en España: precio del alquiler por municipio (VIA), evolución de precios (INE), ejecuciones hipotecarias y lanzamientos por CCAA (INE/CGPJ), y registro de medidas (BOE).",
 "url":"https://vivienda.pruebapublica.com/","creator":{{"@type":"Organization","name":"pruebapublica.com"}},
 "license":"https://creativecommons.org/licenses/by/4.0/","isAccessibleForFree":true,
+"distribution":{distrib_json},
 "keywords":["vivienda","alquiler","desahucios","lanzamientos","INE","CGPJ","BOE","España"]}}
 </script>
 <style>
@@ -551,7 +666,7 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 @media(max-width:820px){{.inds{{grid-template-columns:repeat(2,1fr)}} .grid{{grid-template-columns:1fr}}}}
 </style></head><body>
 <nav class="nav"><div class="in"><b>🏠 Observatorio de la vivienda</b>
-<a href="#indicadores">Indicadores</a><a href="#mapa">Mapa</a><a href="#comparador">Comparador</a><a href="#calendario">Calendario</a><a href="#medidas">Medidas</a><a href="#metodo">Método</a><a href="#apoyar">Apoyar</a><a href="/fuentes.html">Fuentes</a><a href="/propiedad.html">Propiedad</a>
+<a href="#indicadores">Indicadores</a><a href="#mapa">Mapa</a><a href="#comparador">Comparador</a><a href="#calendario">Calendario</a><a href="#medidas">Medidas</a><a href="#metodo">Método</a><a href="#apoyar">Apoyar</a><a href="/fuentes.html">Fuentes</a><a href="/propiedad.html">Propiedad</a><a href="/datos.html">Datos</a>
 <a href="https://pruebapublica.com" style="opacity:.7">pruebapublica.com</a></div></nav>
 <header class="hero"><div class="wrap">
 <h1>Qué dicen los datos oficiales de vivienda, sin puntuaciones ni atribuciones</h1>
@@ -560,10 +675,10 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 <div class="inds" id="indicadores">{inds}</div>
 <main>
 <h2>Precio de compraventa de vivienda, variación anual <span>· IPV nacional (INE)</span></h2>
-<div class="panel">{svg_line(ipv)}<p class="mut" style="font-size:.8rem">Índice de Precios de Vivienda (IPV), total nacional, variación anual (%). Fuente: <a href="https://www.ine.es/">INE</a>. Las medidas del BOE se registran abajo.</p></div>
+<div class="panel">{svg_line(ipv)}<p class="mut" style="font-size:.8rem">Índice de Precios de Vivienda (IPV), total nacional, variación anual (%). Fuente: <a href="https://www.ine.es/">INE</a>. Las medidas del BOE se registran abajo.</p>{_descarga("precios-ipv")}</div>
 
 <h2 id="mapa">Mapa de calor: precio del alquiler por provincia <span>· €/m²</span></h2>
-<div class="panel">{heatmap_provincias(rows)}<p class="mut" style="font-size:.8rem">Mediana de los municipios con datos VIA de cada provincia (anuncios activos; no es un promedio provincial oficial). <b>Más claro = menos €/m² · más oscuro = más €/m²</b> (misma escala, sin juicio de valor).{" Datos a " + E(str(v["fecha"])) + "." if v["fecha"] else ""} <a href="https://municipal.viajeinteligencia.com/alquiler.html">Detalle por municipio ↗</a></p></div>
+<div class="panel">{heatmap_provincias(rows)}<p class="mut" style="font-size:.8rem">Mediana de los municipios con datos VIA de cada provincia (anuncios activos; no es un promedio provincial oficial). <b>Más claro = menos €/m² · más oscuro = más €/m²</b> (misma escala, sin juicio de valor).{" Datos a " + E(str(v["fecha"])) + "." if v["fecha"] else ""} <a href="https://municipal.viajeinteligencia.com/alquiler.html">Detalle por municipio ↗</a></p>{_descarga("alquiler-provincia-via")}</div>
 
 <h2>Ejecuciones hipotecarias de vivienda por CCAA <span>· INE{f" · {eh_anyo}" if eh_anyo else ""}</span></h2>
 <div class="panel">
@@ -571,25 +686,25 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 <p style="font-size:.85rem;margin:18px 0 2px"><b>Cronología nacional</b> · viviendas con ejecución iniciada, por año</p>
 {svg_line([(str(a), v) for a, v in eh_nac], color="#0f766e", fmt=lambda v: f"{int(v):,}".replace(",", "."))}
 <p class="mut" style="font-size:.8rem">Ejecuciones hipotecarias <b>iniciadas sobre vivienda</b>, por CCAA. <b>Total nacional {eh_tot_txt}</b>. Fuente: <a href="https://www.ine.es/">INE</a>.</p>
-<p class="mut" style="font-size:.8rem">Nota: los <b>lanzamientos (desahucios)</b> los publica el <b>CGPJ</b> (trimestral; próximo 16-oct-2026).</p></div>
+<p class="mut" style="font-size:.8rem">Nota: los <b>lanzamientos (desahucios)</b> los publica el <b>CGPJ</b> (trimestral; próximo 16-oct-2026).</p>{_descarga("ejecuciones-hipotecarias-ccaa")}</div>
 
 <h2>Lanzamientos (desahucios) por CCAA <span>· CGPJ{f" · {lz_per}" if lz_per else ""}</span></h2>
 <div class="panel">
 {bloque_barras(lz, color="#c2410c", fmt=lambda v: f"{int(v):,}".replace(",", "."), unidad="", grupo="comunidades autónomas")}
 <p style="font-size:.85rem;margin:18px 0 2px"><b>Cronología nacional</b> · lanzamientos por trimestre</p>
 {svg_line([(str(a), v) for a, v in lz_serie], color="#c2410c", fmt=lambda v: f"{int(v):,}".replace(",", "."))}
-<p class="mut" style="font-size:.8rem">Lanzamientos <b>practicados</b> (desalojo), por CCAA. Total {lz_per}: <b>{lz_tot_txt}</b>. Fuente: <a href="https://www.poderjudicial.es/">CGPJ</a> (trimestral).</p></div>
+<p class="mut" style="font-size:.8rem">Lanzamientos <b>practicados</b> (desalojo), por CCAA. Total {lz_per}: <b>{lz_tot_txt}</b>. Fuente: <a href="https://www.poderjudicial.es/">CGPJ</a> (trimestral).</p>{_descarga("lanzamientos-ccaa")}</div>
 
 <h2>Viviendas turísticas por CCAA <span>· INE{f" · {vut_anyo}" if vut_anyo else ""}</span></h2>
 <div class="panel">
 {bloque_barras(vut, color="#7c3aed", fmt=lambda v: f"{int(v):,}".replace(",", "."), unidad="", grupo="comunidades autónomas")}
-<p class="mut" style="font-size:.8rem">Viviendas de uso turístico (VUT) por <b>comunidad autónoma</b>, {E(str(vut_anyo))}. Total nacional: <b>{vut_tot_txt}</b>{" · " + f"{vut_pct:.2f}".replace(".", ",") + f" % ({E(str(vut_anyo))})" if vut_pct else ""} del total de viviendas censadas. Fuente: <a href="https://www.ine.es/">INE</a> (Estadística de Viviendas Turísticas).</p></div>
+<p class="mut" style="font-size:.8rem">Viviendas de uso turístico (VUT) por <b>comunidad autónoma</b>, {E(str(vut_anyo))}. Total nacional: <b>{vut_tot_txt}</b>{" · " + f"{vut_pct:.2f}".replace(".", ",") + f" % ({E(str(vut_anyo))})" if vut_pct else ""} del total de viviendas censadas. Fuente: <a href="https://www.ine.es/">INE</a> (Estadística de Viviendas Turísticas).</p>{_descarga("viviendas-turisticas-ccaa")}</div>
 
 <h2 id="control">Punto de control · decretos de sep–oct 2026</h2>
 <div class="panel">
 <p style="margin:0 0 12px">Los RDL 26/2026 y 27/2026 se publicaron el <b>29-sep-2026</b>. La <b>referencia</b> es el último dato disponible de cada serie <b>en su propio periodo</b> (no una fecha de corte): precios (IPV/IPVA), lanzamientos (CGPJ), ejecuciones (INE), viviendas turísticas (VUT) y alquiler (VIA).</p>
 <table><thead><tr><th>Indicador</th><th class="num">Referencia · valor · periodo</th><th class="num">Último dato · valor · periodo</th><th class="num">Δ</th><th>Fuente</th></tr></thead><tbody>{filas_control}</tbody></table>
-<p class="mut" style="font-size:.8rem">⚠️ <b>Ninguna serie publicada mide todavía el periodo posterior a los decretos.</b> Los hitos de <b>16-oct-2026 (CGPJ 2T) y 14-dic-2026 (CGPJ 3T)</b> describen periodos <b>anteriores</b> a los RDL; la primera lectura posterior (4T-2026) llegará en <b>~feb-2027</b>. Cada dato nuevo se compara con esta referencia.</p></div>
+<p class="mut" style="font-size:.8rem">⚠️ <b>Ninguna serie publicada mide todavía el periodo posterior a los decretos.</b> Los hitos de <b>16-oct-2026 (CGPJ 2T) y 14-dic-2026 (CGPJ 3T)</b> describen periodos <b>anteriores</b> a los RDL; la primera lectura posterior (4T-2026) llegará en <b>~feb-2027</b>. Cada dato nuevo se compara con esta referencia.</p>{_descarga("punto-control")}</div>
 
 <h2 id="comparador">{E(region)} frente a España</h2>
 <div class="panel"><table><thead><tr><th>Indicador</th><th>Periodo</th><th class="num">España</th><th class="num">{E(region)}</th></tr></thead><tbody>{comp_rows}</tbody></table></div>
@@ -598,7 +713,7 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 <div class="panel">{cal}</div>
 
 <h2 id="medidas">Registro de medidas (BOE)</h2>
-<div class="panel">{filas_med}<div class="grid" style="margin-top:12px">{boe_html}</div></div>
+<div class="panel">{filas_med}<div class="grid" style="margin-top:12px">{boe_html}</div>{_descarga("boe-vivienda")}</div>
 
 <h2 id="metodo">Método y límites</h2>
 <div class="panel"><ul>
@@ -625,12 +740,14 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
         f.write("User-agent: *\nAllow: /\nSitemap: https://vivienda.pruebapublica.com/sitemap.xml\n")
     with open(os.path.join(ROOT, "web", "sitemap.xml"), "w", encoding="utf-8") as f:
         f.write('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-                f'<url><loc>https://vivienda.pruebapublica.com/</loc><lastmod>{hoy}</lastmod></url>\n<url><loc>https://vivienda.pruebapublica.com/fuentes.html</loc><lastmod>{hoy}</lastmod></url>\n<url><loc>https://vivienda.pruebapublica.com/propiedad.html</loc><lastmod>{hoy}</lastmod></url>\n</urlset>\n')
+                f'<url><loc>https://vivienda.pruebapublica.com/</loc><lastmod>{hoy}</lastmod></url>\n<url><loc>https://vivienda.pruebapublica.com/fuentes.html</loc><lastmod>{hoy}</lastmod></url>\n<url><loc>https://vivienda.pruebapublica.com/propiedad.html</loc><lastmod>{hoy}</lastmod></url>\n<url><loc>https://vivienda.pruebapublica.com/datos.html</loc><lastmod>{hoy}</lastmod></url>\n</urlset>\n')
     with open(os.path.join(ROOT, "web", "fuentes.html"), "w", encoding="utf-8") as f:
         f.write(_fuentes_html())
     with open(os.path.join(ROOT, "web", "propiedad.html"), "w", encoding="utf-8") as f:
         f.write(_propiedad_html(rows, v))
-    print(f"[gen] {OUT} + fuentes.html + propiedad.html · IPV={len(ipv)} pts · EH CCAA={len(eh)} · provincias · {v['n']} municipios")
+    with open(os.path.join(ROOT, "web", "datos.html"), "w", encoding="utf-8") as f:
+        f.write(_datos_html(datasets))
+    print(f"[gen] index + fuentes + propiedad + datos + {len(datasets)} series (CSV/JSON) · IPV={len(ipv)} pts · EH CCAA={len(eh)} · {v['n']} municipios")
 
 
 if __name__ == "__main__":
