@@ -150,15 +150,19 @@ def build():
     ipva = ine.serie("ipva_indice")
 
     tend, _ = _tendencia(ipv)
+    ipva_s = ine.serie("ipva_var_anual")
+    ipva_var = ipva_s[-1][1] if ipva_s else None
+    tend_ia, _ = _tendencia(ipva_s)
     inds = "".join([
         _ind(_pct(ipv_ult), "", tend, {"subiendo": "Subiendo", "bajando": "Bajando", "estable": "Estable"}[tend],
-             "INE, IPV (compraventa)", f"Variación anual · trimestral" + (f" · nueva {_pct(nueva)}, 2.ª mano {_pct(seg)}" if nueva and seg else "")),
-        _ind("—", "", "estable", "Pendiente", "INE, ETDP (compraventas inscritas)", "por conectar"),
-        _ind("—", "", "estable", "Pendiente", "INE, IPVA (alquiler, datos fiscales)", "por conectar"),
-        _ind("—", "", "estable", "Pendiente", "INE — IRAV (referencia legal)", "por conectar"),
+             "INE · IPV (compraventa)", "variación anual" + (f" · nueva {_pct(nueva)}, 2.ª mano {_pct(seg)}" if nueva and seg else "")),
+        _ind(_pct(ipva_var), "", tend_ia, {"subiendo": "Subiendo", "bajando": "Bajando", "estable": "Estable"}[tend_ia],
+             "INE · IPVA (alquiler)", "variación anual"),
+        _ind((f"{int(lz_total):,}".replace(",", ".") if lz_total else "—"), "", "estable",
+             (lz_per or "—"), "CGPJ · lanzamientos (desahucios)", "trimestral"),
         _ind((f"{int(eh_total):,}".replace(",", ".") if eh_total else "—"), "", "estable",
-              ("Último año" if eh_total else "Pendiente"), "INE — ejecuciones hipotecarias de vivienda",
-              (f"{eh_anyo} · anual · CGPJ lanzamientos: 16/10" if eh_anyo else "por conectar")),
+             (str(eh_anyo) if eh_anyo else "—"), "INE · ejecuciones hipotecarias", "anual"),
+        _ind(_eur(v["mediana"]) + "<small>/m²</small>", "", "estable", "Actual", "VIA · alquiler mediano", "anual"),
     ])
 
     eh_bars = "".join(
