@@ -111,6 +111,97 @@ def _tendencia(serie):
 
 
 
+
+SOURCES = [
+    ("INE · IPV", "Precio de compraventa de vivienda (variación anual)",
+     "Índice de Precios de Vivienda", "https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA/80270",
+     "Trimestral", "INE — reutilización permitida citando la fuente", "https://www.ine.es/"),
+    ("INE · IPVA", "Índice de precios del alquiler (variación anual)",
+     "Índice de Precios de Vivienda en Alquiler", "https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA/59056",
+     "Anual (experimental, base fiscal)", "INE", "https://www.ine.es/"),
+    ("INE · EH", "Ejecuciones hipotecarias de vivienda por CCAA",
+     "Estadística de Ejecuciones Hipotecarias", "https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA/10740",
+     "Trimestral", "INE", "https://www.ine.es/"),
+    ("INE · VTE", "Viviendas turísticas (VUT) por CCAA",
+     "Estadística de Viviendas Turísticas", "https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA/46141",
+     "Anual", "INE", "https://www.ine.es/"),
+    ("CGPJ", "Lanzamientos (desahucios) por CCAA y trimestre",
+     "Efecto de la crisis económica en los órganos judiciales (Excel trimestral)",
+     "https://www.poderjudicial.es/cgpj/es/Temas/Estadistica-Judicial/",
+     "Trimestral", "CGPJ — datos judiciales públicos", "https://www.poderjudicial.es/"),
+    ("BOE", "Decretos y disposiciones sobre vivienda",
+     "BOE · datos abiertos (sumario diario XML)",
+     "https://www.boe.es/datosabiertos/api/boe/sumario/AAAAMMDD",
+     "Diaria", "BOE — reutilización permitida citando la fuente", "https://www.boe.es/datosabiertos/"),
+    ("VIA", "Precio del alquiler por municipio (€/m²)",
+     "Índice VIA (anuncios de alquiler activos)",
+     "https://municipal.viajeinteligencia.com/alquiler.html",
+     "Actualización periódica", "propia (indicativo; no es serie oficial)", "https://municipal.viajeinteligencia.com/alquiler.html"),
+]
+
+
+def _fuentes_html():
+    filas = "".join(
+        f'<tr><td><b>{E(n)}</b></td><td>{E(q)}<br><span class="mut" style="font-size:.78rem">{E(d)}</span></td>'
+        f'<td><code style="font-size:.72rem;word-break:break-all">{E(ep)}</code></td><td>{E(per)}<br><span class="mut" style="font-size:.78rem">{E(lic)}</span></td>'
+        f'<td><a href="{E(link)}" target="_blank" rel="noopener">ver ↗</a></td></tr>'
+        for n, q, d, ep, per, lic, link in SOURCES)
+    return f"""<!doctype html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fuentes y auditoría — Observatorio de la vivienda</title>
+<meta name="description" content="Fuentes oficiales (INE, CGPJ, BOE, VIA), endpoint exacto, periodicidad y cómo se verifica cada dato. Auditoría de fuentes.">
+<link rel="canonical" href="https://vivienda.pruebapublica.com/fuentes.html">
+<meta name="robots" content="index, follow">
+<style>
+:root{{--ink:#0f172a;--mut:#64748b;--accent:#0f766e;--line:#e2e8f0;--bg:#f8fafc}}
+*{{box-sizing:border-box}} body{{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.6}}
+.hero{{background:linear-gradient(135deg,#0f766e,#0e7490);color:#fff;padding:34px 20px}} .wrap{{max-width:1040px;margin:0 auto;padding:0 20px}}
+.hero h1{{margin:0;font-size:1.7rem}} .hero p{{margin:6px 0 0;opacity:.92}}
+main{{max-width:1040px;margin:0 auto;padding:24px 20px 60px}}
+h2{{font-size:1.15rem;margin:28px 0 10px}} table{{width:100%;border-collapse:collapse;font-size:.85rem;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden}}
+th{{text-align:left;padding:9px 10px;background:#f1f5f9;color:var(--mut);font-size:.74rem;text-transform:uppercase}} td{{padding:9px 10px;border-top:1px solid var(--line);vertical-align:top}}
+code{{background:#f1f5f9;padding:1px 4px;border-radius:4px}} .mut{{color:var(--mut)}} a{{color:var(--accent)}}
+.panel{{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px 18px}}
+</style></head><body>
+<header class="hero"><div class="wrap"><h1>Fuentes y auditoría</h1>
+<p>Qué datos usamos, de dónde salen exactamente, cada cuánto se actualizan y cómo se verifican.</p></div></header>
+<main>
+<h2>1. Fuentes (todas oficiales y abiertas, salvo VIA)</h2>
+<p class="mut" style="font-size:.85rem">Cada cifra del observatorio procede de una de estas fuentes. Se accede por su <b>API o fichero público</b>; el endpoint exacto se indica para poder reproducirlo.</p>
+<table><thead><tr><th>Fuente</th><th>Qué aporta</th><th>Endpoint (reproducible)</th><th>Periodicidad / licencia</th><th></th></tr></thead>
+<tbody>{filas}</tbody></table>
+
+<h2>2. Cómo se obtiene y se verifica</h2>
+<div class="panel"><ul>
+<li><b>Ingesta directa</b> de las APIs/ficheros anteriores (sin intermediarios): los valores se guardan <b>tal cual</b> en <code>data/vivienda.db</code>.</li>
+<li><b>Reproducible</b>: cualquiera puede llamar al mismo endpoint y comparar. Los módulos de ingesta son públicos (<code>ingest/</code>).</li>
+<li><b>Reconstrucción diaria</b> por cron: los datos se refrescan solos cuando la fuente publica.</li>
+<li><b>Sin edición de cifras</b>: el generador solo ordena y agrega; no altera valores ni los mezcla entre fuentes distintas.</li>
+<li><b>Fecha visible</b>: cada indicador lleva su periodo (p. ej. «26-T1», «2025»).</li>
+</ul></div>
+
+<h2>3. Trazabilidad por sección</h2>
+<div class="panel"><ul>
+<li>Indicadores y gráfico de precio → <b>INE (IPV)</b>.</li>
+<li>Alquiler (índice) → <b>INE (IPVA)</b>.</li>
+<li>Ejecuciones hipotecarias → <b>INE (EH)</b>.</li>
+<li>Lanzamientos (desahucios) → <b>CGPJ</b>.</li>
+<li>Viviendas turísticas → <b>INE (VTE)</b>.</li>
+<li>Precio del alquiler por municipio / mapa → <b>VIA</b> (anuncios; indicativo).</li>
+<li>Decretos → <b>BOE</b> (sumario diario).</li>
+</ul></div>
+
+<h2>4. Límites de la auditoría</h2>
+<div class="panel"><ul>
+<li><b>Etiquetas y licencias de reutilización</b> de INE/CGPJ/MIVAU: por confirmar (uso citando fuente).</li>
+<li><b>Momentos distintos</b>: precios notariales, registros, alquiler fiscal y lanzamientos miden periodos distintos → <b>no se combinan</b> en un mismo gráfico.</li>
+<li><b>VIA no es serie oficial</b> (precios de oferta): se marca como indicativo.</li>
+<li>El observatorio <b>no interpreta</b> causalidad: muestra hechos y su fuente.</li>
+</ul></div>
+<p class="mut" style="font-size:.8rem">Última revisión: {date.today().isoformat()} · <a href="/">← volver al observatorio</a></p>
+</main></body></html>"""
+
+
 def bloque_barras(pares, color, fmt=None, unidad="", top=10):
     """Top-N barras + desplegable con la lista completa (no se pierde detalle)."""
     if not pares:
@@ -345,7 +436,7 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 @media(max-width:820px){{.inds{{grid-template-columns:repeat(2,1fr)}} .grid{{grid-template-columns:1fr}}}}
 </style></head><body>
 <nav class="nav"><div class="in"><b>🏠 Observatorio de la vivienda</b>
-<a href="#indicadores">Indicadores</a><a href="#mapa">Mapa</a><a href="#comparador">Comparador</a><a href="#calendario">Calendario</a><a href="#medidas">Medidas</a><a href="#metodo">Método</a><a href="#apoyar">Apoyar</a>
+<a href="#indicadores">Indicadores</a><a href="#mapa">Mapa</a><a href="#comparador">Comparador</a><a href="#calendario">Calendario</a><a href="#medidas">Medidas</a><a href="#metodo">Método</a><a href="#apoyar">Apoyar</a><a href="/fuentes.html">Fuentes</a>
 <a href="https://pruebapublica.com" style="opacity:.7">pruebapublica.com</a></div></nav>
 <header class="hero"><div class="wrap">
 <h1>Qué dicen los datos oficiales de vivienda, sin puntuaciones ni atribuciones</h1>
@@ -419,8 +510,10 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
         f.write("User-agent: *\nAllow: /\nSitemap: https://vivienda.pruebapublica.com/sitemap.xml\n")
     with open(os.path.join(ROOT, "web", "sitemap.xml"), "w", encoding="utf-8") as f:
         f.write('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-                f'<url><loc>https://vivienda.pruebapublica.com/</loc><lastmod>{hoy}</lastmod></url>\n</urlset>\n')
-    print(f"[gen] {OUT} · IPV={len(ipv)} pts · EH CCAA={len(eh)} · provincias · {v['n']} municipios")
+                f'<url><loc>https://vivienda.pruebapublica.com/</loc><lastmod>{hoy}</lastmod></url>\n<url><loc>https://vivienda.pruebapublica.com/fuentes.html</loc><lastmod>{hoy}</lastmod></url>\n</urlset>\n')
+    with open(os.path.join(ROOT, "web", "fuentes.html"), "w", encoding="utf-8") as f:
+        f.write(_fuentes_html())
+    print(f"[gen] {OUT} + fuentes.html · IPV={len(ipv)} pts · EH CCAA={len(eh)} · provincias · {v['n']} municipios")
 
 
 if __name__ == "__main__":
