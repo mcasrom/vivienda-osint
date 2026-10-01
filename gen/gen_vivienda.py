@@ -277,7 +277,8 @@ def _datos_html(datasets):
 <div class="panel"><table><thead><tr><th>Serie</th><th>Periodo / licencia</th><th>Descarga</th></tr></thead><tbody>{filas}</tbody></table>
 <p class="mut" style="font-size:.8rem">Cada serie se publica como <b>CSV</b> (UTF-8, separado por comas, punto decimal) y <b>JSON</b>. Los ficheros se regeneran con la página; el endpoint de cada fuente está en <a href="/fuentes.html">Fuentes</a>.</p></div>
 <h2>2. Cómo citar</h2>
-<div class="panel"><p style="font-size:.9rem">Observatorio de la vivienda (pruebapublica.com). Datos de INE, CGPJ, BOE y VIA (indicativo). Citando la fuente original y este observatorio.</p></div>
+<div class="panel"><p style="font-size:.9rem">Observatorio de la vivienda (pruebapublica.com). Datos de INE, CGPJ, BOE y VIA (indicativo). Citando la fuente original y este observatorio.</p>
+<p class="mut" style="font-size:.82rem">Atajo: <a href="/data/latest.json">latest.json</a> (último dato de cada indicador) · catálogo <a href="/data/index.json">index.json</a> · guía para asistentes de IA: <a href="/llms.txt">/llms.txt</a>.</p></div>
 <h2>3. Límites</h2>
 <div class="panel"><ul style="font-size:.9rem">
 <li>Las cifras son <b>tal cual</b> las publica cada organismo, agregadas cuando la serie es por CCAA/provincia.</li>
@@ -613,6 +614,64 @@ def build():
         [{"@type": "DataDownload", "name": d["titulo"], "encodingFormat": "text/csv",
           "contentUrl": f"https://vivienda.pruebapublica.com/data/{d['id']}.csv"} for d in datasets],
         ensure_ascii=False)
+
+    # instantánea combinada con el último dato de cada indicador
+    _uni = {"ipv": "%", "ipva": "%", "med": "€/m²", "lz": "lanzamientos", "eh": "ejecuciones", "vut": "viviendas"}
+    _tm = {"ipv": (tend, "var"), "ipva": (tend_ia, "var"), "lz": (tend_lz, "nivel"),
+           "eh": (tend_eh, "nivel"), "med": ("", ""), "vut": ("", "")}
+    indicadores = {}
+    for k, tp, tt, src in _IND:
+        val, per = _vp(ind_now.get(k))
+        t, tipo = _tm.get(k, ("", ""))
+        etq = _etq_var(t) if tipo == "var" else _etq_nivel(t) if tipo == "nivel" else ""
+        indicadores[k] = {"indicador": tt, "valor": val, "periodo": per, "unidad": _uni.get(k, ""),
+                          "fuente": src, "tendencia": etq}
+    with open(os.path.join(DATA_DIR, "latest.json"), "w", encoding="utf-8") as f:
+        json.dump({"observatorio": "Observatorio de la vivienda",
+                   "url": "https://vivienda.pruebapublica.com/", "generado": hoy,
+                   "referencia_decretos": {"fecha": "2026-09-29",
+                                           "detalle": "RDL 26/2026 y 27/2026 (vivienda)"},
+                   "indicadores": indicadores,
+                   "catalogo": "https://vivienda.pruebapublica.com/data/index.json"},
+                  f, ensure_ascii=False, indent=1)
+
+    llms = f"""# Observatorio de la vivienda
+
+> Observatorio cívico e independiente que publica datos oficiales de vivienda en España
+> (INE, CGPJ, BOE) y un indicador de alquiler (VIA). Encuadre neutral: sin puntuaciones
+> compuestas ni atribuciones; cada cifra lleva unidad, fuente y fecha.
+
+## Páginas
+- Panel: https://vivienda.pruebapublica.com/
+- Fuentes, método y límites: https://vivienda.pruebapublica.com/fuentes.html
+- Propiedad, oferta y grandes tenedores: https://vivienda.pruebapublica.com/propiedad.html
+- Datos y descargas: https://vivienda.pruebapublica.com/datos.html
+
+## Datos abiertos (CSV / JSON, sin registro)
+- Catálogo completo: https://vivienda.pruebapublica.com/data/index.json
+- Último dato de cada indicador: https://vivienda.pruebapublica.com/data/latest.json
+- Una serie por indicador; cada una en `/data/<serie>.csv` y `/data/<serie>.json`:
+  precios-ipv · alquiler-ipva · ejecuciones-hipotecarias-ccaa · ejecuciones-hipotecarias-nacional ·
+  lanzamientos-ccaa · lanzamientos-cronologia · viviendas-turisticas-ccaa ·
+  alquiler-provincia-via · boe-vivienda · punto-control
+
+## Fuentes
+- INE: IPV (tabla 80270), IPVA (59056), ejecuciones hipotecarias (10740), viviendas turísticas (46141).
+- CGPJ: «Efecto de la crisis en los órganos judiciales» (lanzamientos, Excel trimestral).
+- BOE: sumario diario, sección I (disposiciones generales).
+- VIA: precio de oferta del alquiler (indicativo; no es serie oficial).
+
+## Licencia y cita
+- Observatorio: CC BY 4.0. Fuentes: reutilización citando al organismo.
+- Cita sugerida: «Observatorio de la vivienda (pruebapublica.com), {hoy}».
+
+## Límites
+- No se afirma causalidad; el punto de control usa la referencia por periodo de cada serie.
+- Los datos publicados miden periodos anteriores a los RDL de 29-sep-2026; la primera lectura
+  posterior es el 4T-2026 (~feb-2027).
+"""
+    with open(os.path.join(ROOT, "web", "llms.txt"), "w", encoding="utf-8") as f:
+        f.write(llms)
 
     doc = f"""<!doctype html><html lang="es"><head><meta charset="utf-8">
 <meta name="google-site-verification" content="mlyuKtDMOhZ2x2lMrqr-MHT9LeUW8i6uEJw1Sv6AzNY">
