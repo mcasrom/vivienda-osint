@@ -142,6 +142,8 @@ def build():
     nueva = ine.ultimo("ipv_nueva_var")
     seg = ine.ultimo("ipv_segunda_var")
     eh, eh_anyo, eh_total = ine.eh_ccaa()
+    eh_nac = ine.serie("eh:Total Nacional")
+    eh_crono = " · ".join(f"{a} <b>{int(v):,}</b>".replace(",", ".") for a, v in eh_nac)
     ipva = ine.serie("ipva_indice")
 
     tend, _ = _tendencia(ipv)
@@ -237,6 +239,7 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 
 <h2>Ejecuciones hipotecarias de vivienda por CCAA <span>· INE{f" · {eh_anyo}" if eh_anyo else ""}</span></h2>
 <div class="panel"><table><thead><tr><th>Comunidad autónoma</th><th class="num">Viviendas</th></tr></thead><tbody>{eh_bars or "<tr><td>sin datos</td><td></td></tr>"}</tbody></table>
+<p style="font-size:.85rem;margin:8px 0"><b>Cronología nacional:</b> {eh_crono or "sin serie"}</p>
 <p class="mut" style="font-size:.8rem">Ejecuciones hipotecarias <b>iniciadas sobre vivienda</b>, por comunidad autónoma. <b>Total nacional {int(eh_total):,}</b>. Fuente: <a href="https://www.ine.es/">INE</a> (Estadística de Ejecuciones Hipotecarias).</p>
 <p class="mut" style="font-size:.8rem">Nota: los <b>lanzamientos (desahucios)</b> los publica el <b>CGPJ</b> (trimestral; próximo dato 16-oct-2026) — pendiente de conectar. Aquí se usa la serie INE de ejecuciones hipotecarias (oficial y abierta).</p></div>
 
