@@ -52,14 +52,12 @@ def build():
     ax.add_patch(Rectangle((0.29, 0.66), 0.025, 0.10, facecolor=amber2, edgecolor="none", zorder=3))
 
     # --- TEXTO ---
-    ax.text(0.045, 0.905, "VIVIENDA · DATOS OFICIALES", color="#67e8f9", fontsize=16, fontweight="bold", zorder=5)
-    ax.text(0.44, 0.72, "La vivienda\nen España", color="#ffffff", fontsize=44, fontweight="bold", va="top", zorder=5)
+    ax.text(0.045, 0.905, "VIVIENDA · DATOS OFICIALES", color="#67e8f9", fontsize=15, fontweight="bold", zorder=5)
     if med:
-        ax.text(0.44, 0.45, f"{med:.0f} €", color="#fbbf24", fontsize=82, fontweight="bold", va="top", zorder=5)
-        ax.text(0.445, 0.255, "alquiler mediano por m²", color="#a5f3fc", fontsize=20, zorder=5)
-    ax.text(0.445, 0.15, f"Desahucios (lanzamientos): {int(tot):,}".replace(",", ".") + f" · {per}", color="#e0f2fe", fontsize=16, zorder=5)
-    ax.text(0.045, 0.10, "pruebapublica.com", color="#fde047", fontsize=20, fontweight="bold", zorder=5)
-    ax.text(0.045, 0.045, "INE · CGPJ · BOE · precio, alquiler y desahucios con fuente", color="#bae6fd", fontsize=13, zorder=5)
+        ax.text(0.40, 0.60, f"{med:.0f}", color="#fbbf24", fontsize=148, fontweight="bold", va="top", zorder=5)
+        ax.text(0.63, 0.455, "€/m²", color="#fbbf24", fontsize=52, fontweight="bold", va="center", zorder=5)
+        ax.text(0.41, 0.235, "alquiler mediano en España", color="#a5f3fc", fontsize=23, zorder=5)
+    ax.text(0.045, 0.085, "pruebapublica.com", color="#fde047", fontsize=22, fontweight="bold", zorder=5)
     fig.savefig(OUT, facecolor="#0b3b4a")
     print("[og] ok | med", med, "| tot", tot, "| per", per)
 
