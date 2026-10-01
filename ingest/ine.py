@@ -68,6 +68,35 @@ def ingest() -> int:
     return n
 
 
+def ingest_eh() -> int:
+    """EH (tabla 10740): ejecuciones hipotecarias de vivienda iniciadas, por CCAA (anual)."""
+    c = _con()
+    n = 0
+    for s in _get("https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA/10740?nult=6&tip=AM"):
+        nom = s.get("Nombre", "")
+        if "General. Número." not in nom:
+            continue
+        ccaa = nom.split(".")[0].strip()
+        for x in s.get("Data", []):
+            if x.get("Valor") is None:
+                continue
+            n += c.execute("INSERT OR REPLACE INTO ine_serie VALUES(?,?,?,?)",
+                           ("eh:" + ccaa, str(x.get("Anyo")), ccaa, float(x["Valor"]))).rowcount
+    c.commit()
+    return n
+
+
+def eh_ccaa(anyo=None):
+    """[(ccaa, valor)] del último año disponible (o el indicado), ordenado desc."""
+    c = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
+    if anyo is None:
+        anyo = c.execute("SELECT MAX(CAST(fecha AS INT)) FROM ine_serie WHERE serie LIKE 'eh:%'").fetchone()[0]
+    rows = c.execute("SELECT etiqueta, valor FROM ine_serie WHERE serie LIKE 'eh:%' AND fecha=? "
+                     "AND etiqueta<>'Total Nacional' ORDER BY valor DESC", (str(anyo),)).fetchall()
+    total = c.execute("SELECT valor FROM ine_serie WHERE serie='eh:Total Nacional' AND fecha=?", (str(anyo),)).fetchone()
+    return rows, anyo, (total[0] if total else None)
+
+
 def serie(nombre: str):
     try:
         c = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
@@ -82,4 +111,4 @@ def ultimo(nombre: str):
 
 
 if __name__ == "__main__":
-    print(f"[ine] puntos actualizados: {ingest()}")
+    print(f"[ine] puntos actualizados: {ingest()} · EH: {ingest_eh()}")

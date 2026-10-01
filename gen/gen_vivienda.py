@@ -141,6 +141,7 @@ def build():
     ipv_ult = ine.ultimo("ipv_var_anual")
     nueva = ine.ultimo("ipv_nueva_var")
     seg = ine.ultimo("ipv_segunda_var")
+    eh, eh_anyo, eh_total = ine.eh_ccaa()
     ipva = ine.serie("ipva_indice")
 
     tend, _ = _tendencia(ipv)
@@ -150,8 +151,14 @@ def build():
         _ind("—", "", "estable", "Pendiente", "INE, ETDP (compraventas inscritas)", "por conectar"),
         _ind("—", "", "estable", "Pendiente", "INE, IPVA (alquiler, datos fiscales)", "por conectar"),
         _ind("—", "", "estable", "Pendiente", "INE — IRAV (referencia legal)", "por conectar"),
-        _ind("—", "", "estable", "Pendiente", "CGPJ (lanzamientos)", "2T: 16/10/2026"),
+        _ind((f"{int(eh_total):,}".replace(",", ".") if eh_total else "—"), "", "estable",
+              ("Último año" if eh_total else "Pendiente"), "INE — ejecuciones hipotecarias de vivienda",
+              (f"{eh_anyo} · anual · CGPJ lanzamientos: 16/10" if eh_anyo else "por conectar")),
     ])
+
+    eh_bars = "".join(
+        f'<tr><td>{E(k)}</td><td class="num">{int(v):,}</td>'.replace(",", ".") + "</tr>"
+        for k, v in eh[:12])
 
     # comparador España vs región
     prov = defaultdict(list)
@@ -228,6 +235,11 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 <h2>Mapa de calor: precio del alquiler por provincia <span>· €/m²</span></h2>
 <div class="panel">{heatmap_provincias(rows)}<p class="mut" style="font-size:.8rem">Mediana de anuncios activos por provincia (Índice VIA). Verde = más barato · rojo = más caro.{" Datos a " + E(str(v["fecha"])) + "." if v["fecha"] else ""} <a href="https://municipal.viajeinteligencia.com/alquiler.html">Detalle por municipio ↗</a></p></div>
 
+<h2>Ejecuciones hipotecarias de vivienda por CCAA <span>· INE{f" · {eh_anyo}" if eh_anyo else ""}</span></h2>
+<div class="panel"><table><thead><tr><th>Comunidad autónoma</th><th class="num">Viviendas</th></tr></thead><tbody>{eh_bars or "<tr><td>sin datos</td><td></td></tr>"}</tbody></table>
+<p class="mut" style="font-size:.8rem">Ejecuciones hipotecarias <b>iniciadas sobre vivienda</b>, por comunidad autónoma. <b>Total nacional {int(eh_total):,}</b>. Fuente: <a href="https://www.ine.es/">INE</a> (Estadística de Ejecuciones Hipotecarias).</p>
+<p class="mut" style="font-size:.8rem">Nota: los <b>lanzamientos (desahucios)</b> los publica el <b>CGPJ</b> (trimestral; próximo dato 16-oct-2026) — pendiente de conectar. Aquí se usa la serie INE de ejecuciones hipotecarias (oficial y abierta).</p></div>
+
 <h2 id="comparador">{E(region)} frente a España</h2>
 <div class="panel"><table><thead><tr><th>Indicador</th><th>Periodo</th><th class="num">España</th><th class="num">{E(region)}</th></tr></thead><tbody>{comp_rows}</tbody></table></div>
 
@@ -251,7 +263,13 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(doc)
-    print(f"[gen] {OUT} · IPV={len(ipv)} pts · provincias heatmap · {v['n']} municipios")
+    # robots + sitemap como ficheros reales
+    with open(os.path.join(ROOT, "web", "robots.txt"), "w", encoding="utf-8") as f:
+        f.write("User-agent: *\nAllow: /\nSitemap: https://vivienda.pruebapublica.com/sitemap.xml\n")
+    with open(os.path.join(ROOT, "web", "sitemap.xml"), "w", encoding="utf-8") as f:
+        f.write('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+                f'<url><loc>https://vivienda.pruebapublica.com/</loc><lastmod>{hoy}</lastmod></url>\n</urlset>\n')
+    print(f"[gen] {OUT} · IPV={len(ipv)} pts · EH CCAA={len(eh)} · provincias · {v['n']} municipios")
 
 
 if __name__ == "__main__":
