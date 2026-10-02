@@ -11,8 +11,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from ingest import boe as boeing, via, ine, cgpj, territorios  # noqa: E402
 
-OUT = os.path.join(ROOT, "web", "index.html")
-DATA_DIR = os.path.join(ROOT, "web", "data")
+# Directorio de salida: por defecto web/ (público); el cron/publicar por staging
+# usa web_tmp/ y solo intercambia si el contrato de datos pasa (regla: publicar
+# después de comprobar, no antes). --out se valida contra ROOT en __main__.
+_OUT_DIR_DEF = "web"   # relativo a ROOT
+OUT_DIR = os.path.join(ROOT, _OUT_DIR_DEF)
+OUT = os.path.join(OUT_DIR, "index.html")
+DATA_DIR = os.path.join(OUT_DIR, "data")
 E = html.escape
 
 # Versión del microservicio (una sola fuente: se muestra en el footer de todas
@@ -712,7 +717,7 @@ def build():
 - El IPVA (alquiler) es un índice anual: describe la variación, no un precio por m², y su
   último dato es de 2024.
 """
-    with open(os.path.join(ROOT, "web", "llms.txt"), "w", encoding="utf-8") as f:
+    with open(os.path.join(OUT_DIR, "llms.txt"), "w", encoding="utf-8") as f:
         f.write(llms)
 
     doc = f"""<!doctype html><html lang="es"><head><meta charset="utf-8">
@@ -835,19 +840,32 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(doc)
     # robots + sitemap como ficheros reales
-    with open(os.path.join(ROOT, "web", "robots.txt"), "w", encoding="utf-8") as f:
+    with open(os.path.join(OUT_DIR, "robots.txt"), "w", encoding="utf-8") as f:
         f.write("User-agent: *\nAllow: /\nSitemap: https://vivienda.pruebapublica.com/sitemap.xml\n")
-    with open(os.path.join(ROOT, "web", "sitemap.xml"), "w", encoding="utf-8") as f:
+    with open(os.path.join(OUT_DIR, "sitemap.xml"), "w", encoding="utf-8") as f:
         f.write('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
                 f'<url><loc>https://vivienda.pruebapublica.com/</loc><lastmod>{hoy}</lastmod></url>\n<url><loc>https://vivienda.pruebapublica.com/fuentes.html</loc><lastmod>{hoy}</lastmod></url>\n<url><loc>https://vivienda.pruebapublica.com/propiedad.html</loc><lastmod>{hoy}</lastmod></url>\n<url><loc>https://vivienda.pruebapublica.com/datos.html</loc><lastmod>{hoy}</lastmod></url>\n</urlset>\n')
-    with open(os.path.join(ROOT, "web", "fuentes.html"), "w", encoding="utf-8") as f:
+    with open(os.path.join(OUT_DIR, "fuentes.html"), "w", encoding="utf-8") as f:
         f.write(_fuentes_html())
-    with open(os.path.join(ROOT, "web", "propiedad.html"), "w", encoding="utf-8") as f:
+    with open(os.path.join(OUT_DIR, "propiedad.html"), "w", encoding="utf-8") as f:
         f.write(_propiedad_html())
-    with open(os.path.join(ROOT, "web", "datos.html"), "w", encoding="utf-8") as f:
+    with open(os.path.join(OUT_DIR, "datos.html"), "w", encoding="utf-8") as f:
         f.write(_datos_html(datasets))
     print(f"[gen] index + fuentes + propiedad + datos + {len(datasets)} series (CSV/JSON) · IPV={len(ipv)} pts · EH CCAA={len(eh)} · alquiler NO publicado ({v['n']} municipios disponibles, muestra no publicable)")
 
 
 if __name__ == "__main__":
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--out", default=_OUT_DIR_DEF,
+                    help=f"directorio de salida relativo a ROOT (def. {_OUT_DIR_DEF}; staging: web_tmp)")
+    a = ap.parse_args()
+    if os.sep in a.out or a.out in ("..", ".", "/"):
+        import sys as _sys
+        print(f"[gen] --out no puede contener rutas: {a.out!r}", file=_sys.stderr)
+        _sys.exit(2)
+    globals().update(
+        OUT_DIR=os.path.join(ROOT, a.out),
+        OUT=os.path.join(ROOT, a.out, "index.html"),
+        DATA_DIR=os.path.join(ROOT, a.out, "data"))
     build()

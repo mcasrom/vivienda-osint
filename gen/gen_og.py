@@ -10,7 +10,7 @@ from matplotlib.colors import LinearSegmentedColormap
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB = os.path.join(ROOT, "data", "vivienda.db")
-OUT = os.path.join(ROOT, "web", "og.png")
+_OUT_DEF = "web"
 
 
 def datos():
@@ -22,7 +22,8 @@ def datos():
     return per, (tot[0] if tot else None), (ipv if ipv else (None, None))
 
 
-def build():
+def build(out_dir: str = "web"):
+    OUT = os.path.join(ROOT, out_dir, "og.png")
     per, tot, (ipv_per, ipv_val) = datos()
     fig = plt.figure(figsize=(12, 6.3), dpi=100)
     ax = fig.add_axes([0, 0, 1, 1]); ax.axis("off")
@@ -71,4 +72,13 @@ def build():
 
 
 if __name__ == "__main__":
-    build()
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--out", default=_OUT_DEF,
+                    help=f"directorio de salida relativo a ROOT (def. {_OUT_DEF})")
+    a = ap.parse_args()
+    if os.sep in a.out or a.out in ("..", ".", "/"):
+        import sys as _sys
+        print(f"[og] --out no puede contener rutas: {a.out!r}", file=_sys.stderr)
+        _sys.exit(2)
+    build(a.out)

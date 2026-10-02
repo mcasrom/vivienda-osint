@@ -1,4 +1,4 @@
-httpx==0.28.1
-pyyaml==6.0.3
-feedparser==6.0.14
+# Única dependencia runtime real: openpyxl (ingest/cgpj.py lee el XLSX del CGPJ).
+# httpx/pyyaml/feedparser se instalaban pero no se usan en ningún módulo (medido
+# con grep el 2-oct-2026): eliminadas. El resto del proyecto es stdlib.
 openpyxl==3.1.5

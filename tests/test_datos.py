@@ -23,7 +23,22 @@ from datetime import date
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ingest import territorios  # noqa: E402
 
+# Identifica qué artefacto se comprueba:
+#  - --web-dir DIR: directorio web a validar (def. ROOT/web). El cron de staging
+#    lo pasa con web_tmp/ para comprobar ANTES de publicar.
+import argparse as _argparse
+_ap = _argparse.ArgumentParser()
+_ap.add_argument("--web-dir", default=None,
+                 help="directorio web (index.html, data/) a validar (def. ROOT/web)")
+_ap.add_argument("--db", default=None, help="ruta a data/vivienda.db (def. ROOT/data/vivienda.db)")
+_a = _ap.parse_args()
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _a.web_dir and (os.sep in _a.web_dir or _a.web_dir in ("..", ".", "/")):
+    print(f"test_datos: --web-dir no puede contener rutas: {_a.web_dir!r}", file=sys.stderr)
+    sys.exit(2)
+WEB = os.path.join(ROOT, _a.web_dir) if _a.web_dir else os.path.join(ROOT, "web")
+DB_P = _a.db or os.path.join(ROOT, "data", "vivienda.db")
 FALLOS: list[str] = []
 OMITIDO: list[str] = []
 
@@ -50,7 +65,7 @@ check(bool(re.match(r"^\d{4}-\d{2}-\d{2}T", str(reg.get("actualizado", "")))),
       f"normas.json: 'actualizado' no es ISO-8601: {reg.get('actualizado')!r}")
 vocab = set(reg.get("estados") or [])
 
-db_p = os.path.join(ROOT, "data", "vivienda.db")
+db_p = DB_P
 en_boe: dict[str, str] = {}
 if os.path.exists(db_p):
     con = sqlite3.connect(db_p)
@@ -85,7 +100,7 @@ for n in reg.get("normas") or []:
         check(b < v, f"{nid}: vigencia {v} no posterior a BOE {b}")
 
 # 7. el CSV publicado declara estado en todas sus filas
-csv_p = os.path.join(ROOT, "web", "data", "boe-vivienda.csv")
+csv_p = os.path.join(WEB, "data", "boe-vivienda.csv")
 if os.path.exists(csv_p):
     with open(csv_p, encoding="utf-8") as fh:
         rd = csv.DictReader(fh)
@@ -106,7 +121,7 @@ else:
 # 8. Nombres de CCAA canónicos, sin duplicados, con los huecos declarados
 # ---------------------------------------------------------------------------
 for did in CCAA_CSV:
-    p_csv = os.path.join(ROOT, "web", "data", did + ".csv")
+    p_csv = os.path.join(WEB, "data", did + ".csv")
     if not os.path.exists(p_csv):
         OMITIDO.append(f"web/data/{did}.csv (generado)")
         continue
@@ -123,7 +138,7 @@ for did in CCAA_CSV:
 # ---------------------------------------------------------------------------
 # 9. Contrato CSV <-> HTML: lo que se descarga es lo que se ve en la página
 # ---------------------------------------------------------------------------
-html_p = os.path.join(ROOT, "web", "index.html")
+html_p = os.path.join(WEB, "index.html")
 if not os.path.exists(html_p):
     OMITIDO.append("web/index.html (generado)")
 if os.path.exists(html_p):
@@ -139,7 +154,7 @@ if os.path.exists(html_p):
         filas = re.findall(r"<tr><td>([^<]+)</td><td class=\"num\">([^<]*)</td></tr>", cuerpo)
         check(len(filas) == int(anunciado),
               f"{did}: la página anuncia {anunciado} filas y pinta {len(filas)}")
-        with open(os.path.join(ROOT, "web", "data", did + ".csv"), encoding="utf-8") as fh:
+        with open(os.path.join(WEB, "data", did + ".csv"), encoding="utf-8") as fh:
             csv_filas = [(r["ccaa"], r[list(r)[-1]]) for r in csv.DictReader(fh)]
         for (nb_html, v_html), (nb_csv, v_csv) in zip(filas, csv_filas):
             check(nb_html == nb_csv,
@@ -158,7 +173,7 @@ if os.path.exists(html_p):
 # tarjeta no puede pintarse como una caída (flecha ▼ / clase verde de bajada).
 FLECHAS = {"se modera": ("▬", ""), "sube más": ("▲", "up"), "estable": ("▬", ""),
            "subiendo": ("▲", "up"), "bajando": ("▼", "down")}
-json_latest = os.path.join(ROOT, "web", "data", "latest.json")
+json_latest = os.path.join(WEB, "data", "latest.json")
 if not os.path.exists(json_latest):
     OMITIDO.append("web/data/latest.json (generado)")
 if os.path.exists(json_latest) and os.path.exists(html_p):

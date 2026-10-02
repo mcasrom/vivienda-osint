@@ -13,7 +13,11 @@ Qué hace, en orden:
 2. Si aparece y dice «convalidación» → `estado: convalidada`; si dice
    «derogación» → `estado: derogada`. Registra `resultado`, `resultado_fecha` y la
    URL oficial. **No se anticipa**: si no hay resolución, no cambia nada.
-3. Avisa por Telegram (una vez, no en cada pasada) y regenera la web + tests.
+3. Avisa por Telegram **una sola vez por resolución** (dedup en
+   `data/watchdog_estado.json`) y comprobando el rc del envío (no se marca como
+   notificado si falla: la siguiente pasada reintenta). Con `--aplicar`, además
+   actualiza el registro (escritura atómica) y regenera la web **por staging**
+   (scripts/regen_publicar.sh: web_tmp + tests, y swap solo si pasan).
 
 Precedentes que fijan el formato esperado del título (verificados en el BOE):
   BOE-A-2023-8221 «Resolución ... por la que se ordena la publicación del Acuerdo
@@ -21,8 +25,8 @@ Precedentes que fijan el formato esperado del título (verificados en el BOE):
   BOE-A-2026-4667 idem, con «Acuerdo de derogación del Real Decreto-ley 2/2026».
 
 Uso:
-  venv/bin/python scripts/watchdog_rdl.py            # comprueba y avisa
-  venv/bin/python scripts/watchdog_rdl.py --aplicar  # además actualiza el registro
+  venv/bin/python scripts/watchdog_rdl.py            # comprueba y avisa (una vez por resolución)
+  venv/bin/python scripts/watchdog_rdl.py --aplicar  # además actualiza registro + regenera
   venv/bin/python scripts/watchdog_rdl.py --dias 7   # ventana de búsqueda (def. 21)
 """
 from __future__ import annotations
@@ -32,12 +36,19 @@ import os
 import re
 import subprocess
 import sys
+import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.join(ROOT, "scripts"))
+from ingest.boe import _es_domingo  # noqa: E402  (causa raíz del 404 dominical silencioso)
+
 NORMAS = os.path.join(ROOT, "data", "normas.json")
+ESTADO_F = os.path.join(ROOT, "data", "watchdog_estado.json")     # qué se avisó (dedup)
+CACHE_SUM = os.path.join(ROOT, "data", "watchdog_sumarios.json")    # sumarios ya leídos
 LOG = os.path.join(ROOT, "logs", "watchdog_rdl.log")
 API = "https://www.boe.es/datosabiertos/api/boe/sumario/%s"
 UA = {"User-Agent": "vivienda-osint/0.1 (+pruebapublica.com)", "Accept": "application/xml"}
@@ -70,13 +81,24 @@ def match_resolucion(titulo: str, rdl: str | None = None):
 
 
 def _log(msg: str) -> None:
+    """Log a fichero + stdout, con hora (antes solo fecha: no se veía cuándo pasaba)."""
+    marca = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(msg, flush=True)
     try:
         os.makedirs(os.path.dirname(LOG), exist_ok=True)
         with open(LOG, "a", encoding="utf-8") as fh:
-            fh.write(f"[{date.today().isoformat()}] {msg}\n")
+            fh.write(f"[{marca}] {msg}\n")
     except OSError as e:  # noqa: BLE001
         print(f"[watchdog] no se pudo escribir el log: {e}", file=sys.stderr)
+
+
+def _escritura_atomica(path: str, data) -> None:
+    """Nunca deja un JSON a medias si el proceso muere a mitad de escritura."""
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, ensure_ascii=False, indent=1)
+        fh.write("\n")
+    os.replace(tmp, path)
 
 
 def _sumario(d: date) -> ET.Element:
@@ -85,78 +107,101 @@ def _sumario(d: date) -> ET.Element:
         return ET.fromstring(r.read())
 
 
+def _items(d: date) -> list[dict]:
+    """Sumario del día filtrado a resoluciones del Congreso, con caché (a partir de
+    hoy se relee en cada pasada: un 404 de domingo NO se cachea como vacío definitivo
+    y el BOE puede publicar tarde por la mañana)."""
+    cache = {}
+    if os.path.exists(CACHE_SUM):
+        try:
+            cache = json.load(open(CACHE_SUM, encoding="utf-8"))
+        except ValueError:
+            cache = {}
+    clave = d.isoformat()
+    if clave in cache.get("dias", {}) and d < date.today():
+        return cache["dias"][clave]
+    try:
+        root = _sumario(d)
+    except urllib.error.HTTPError as e:
+        if e.code == 404 and _es_domingo(d):
+            _log(f"[watchdog] {d.isoformat()} domingo sin sumario (esperado)")
+            return []
+        _log(f"[watchdog] {d.isoformat()} sumario no disponible (HTTP {e.code})")
+        return []
+    except Exception as e:  # noqa: BLE001
+        _log(f"[watchdog] {d.isoformat()} sumario no disponible ({type(e).__name__}: {e})")
+        return []
+    out = []
+    for item in root.iter("item"):
+        titulo = (item.findtext("titulo") or "").strip()
+        res = match_resolucion(titulo, None)
+        if res is None:
+            continue
+        ident = (item.findtext("identificador") or "").strip()
+        url = ""
+        for tag in ("url_txt", "url_html", "url_pdf"):
+            el = item.find(tag)
+            if el is not None and el.text:
+                url = el.text.strip()
+                break
+        out.append({"id": ident, "titulo": titulo,
+                    "url": url or f"https://www.boe.es/buscar/doc.php?id={ident}",
+                    "numero": res["numero"], "anio": res["anio"], "estado": res["estado"]})
+    if d < date.today():    # solo los días ya cerrados son inmutables
+        cache.setdefault("dias", {})[clave] = out
+        _escritura_atomica(CACHE_SUM, cache)
+    return out
+
+
 def buscar(rdl: str, desde: date, hasta: date) -> dict | None:
     """Resolución del Congreso sobre ese RDL en [desde, hasta], o None."""
     n, anio = rdl.split("/")
     for i in range((hasta - desde).days + 1):
         d = desde + timedelta(days=i)
-        try:
-            root = _sumario(d)
-        except Exception as e:  # noqa: BLE001
-            # un sumario que no se puede leer no es motivo para callarse el resto
-            _log(f"[watchdog] {d.isoformat()} sumario no disponible ({type(e).__name__}: {e})")
-            continue
-        for item in root.iter("item"):
-            titulo = (item.findtext("titulo") or "").strip()
-            res = match_resolucion(titulo, rdl)
-            if res is None:
-                continue
-            ident = (item.findtext("identificador") or "").strip()
-            url = ""
-            for tag in ("url_txt", "url_html", "url_pdf"):
-                el = item.find(tag)
-                if el is not None and el.text:
-                    url = el.text.strip()
-                    break
-            return {"id": ident, "fecha": d.isoformat(), "titulo": titulo,
-                    "url": url or f"https://www.boe.es/buscar/doc.php?id={ident}",
-                    "estado": res["estado"]}
+        for it in _items(d):
+            if it["numero"] == n and it["anio"] == anio:
+                return {"id": it["id"], "fecha": d.isoformat(), "titulo": it["titulo"],
+                        "url": it["url"], "estado": it["estado"]}
     return None
 
 
-def _telegram(msg: str) -> bool:
-    """Aviso al owner. Token/chat se leen del .env del radar (fuente ya existente)."""
-    env = "/home/deploy/hybrid-fimi-radar/.env"
-    try:
-        for line in open(env, encoding="utf-8"):
-            if line and not line.startswith("#") and "=" in line:
-                k, v = line.split("=", 1)
-                os.environ.setdefault(k.strip(), v.strip())
-    except OSError as e:
-        _log(f"[watchdog] sin .env para Telegram ({e})")
-    token = os.environ.get("FIMI_TELEGRAM_BOT_TOKEN", "")
-    chat = os.environ.get("FIMI_OWNER_CHAT") or os.environ.get("FIMI_TELEGRAM_CHAT_ID", "")
-    if not token or not chat:
-        _log("[watchdog] sin token/chat de Telegram: no se avisa (el log queda como aviso)")
-        return False
-    from urllib.request import Request
-    data = json.dumps({"chat_id": chat, "text": msg}).encode()
-    req = Request(f"https://api.telegram.org/bot{token}/sendMessage", data=data,
-                  headers={"Content-Type": "application/json"})
-    try:
-        with urllib.request.urlopen(req, timeout=20) as r:
-            return r.status == 200
-    except Exception as e:  # noqa: BLE001
-        _log(f"[watchdog] Telegram fallo: {e}")
-        return False
+def _enviar(msg: str) -> bool:
+    """Envío a Telegram en .env propio de vivienda (aviso.py); el rc decide el dedup."""
+    from aviso import enviar
+    ok = enviar(msg)
+    if not ok:
+        _log("[watchdog] Telegram no confirmó: no se marca como notificado (reintento)")
+    return ok
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dias", type=int, default=21, help="días hacia atrás a buscar (def. 21)")
     ap.add_argument("--aplicar", action="store_true",
-                    help="actualiza data/normas.json y regenera (por defecto solo avisa)")
+                    help="actualiza data/normas.json y regenera por staging (por defecto solo avisa)")
     args = ap.parse_args()
 
-    with open(NORMAS, encoding="utf-8") as fh:
-        reg = json.load(fh)
+    try:
+        reg = json.load(open(NORMAS, encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        _log(f"[watchdog] no se pudo leer {NORMAS}: {e}")
+        return 1
     hoy = date.today()
     pendientes = [n for n in reg["normas"] if n.get("estado") == "en_votacion"]
     if not pendientes:
         _log(f"[watchdog] nada pendiente ({len(reg['normas'])} normas registradas)")
         return 0
 
-    lineas, cambios = [], 0
+    estado = {}
+    if os.path.exists(ESTADO_F):
+        try:
+            estado = json.load(open(ESTADO_F, encoding="utf-8"))
+        except ValueError:
+            estado = {}
+    notificadas = set(estado.get("notificadas", []))
+
+    novedades: list[tuple[str, str, dict]] = []   # (corta, clave, res)
+    aplicadas: list[dict] = []
     for n in pendientes:
         rdl = n["corta"].split()[-1]          # «RDL 26/2026» -> «26/2026»
         vot = n.get("votacion") or {}
@@ -165,9 +210,11 @@ def main() -> int:
         if not res:
             _log(f"[watchdog] {n['id']} ({rdl}): sin resolución del Congreso desde {desde.isoformat()}")
             continue
-        cambios += 1
-        _log(f"[watchdog] {n['id']} ({rdl}): {res['estado']} · {res['id']} · {res['fecha']}")
-        lineas.append(f"{n['corta']}: {res['estado']} ({res['id']}, {res['fecha']})")
+        clave = f"{rdl}:{res['id']}"
+        _log(f"[watchdog] {n['id']} ({rdl}): {res['estado']} · {res['id']} · {res['fecha']}"
+             + (" (ya avisado)" if clave in notificadas else " (NUEVO)"))
+        if clave not in notificadas:
+            novedades.append((n["corta"], clave, res))
         if args.aplicar:
             n["estado"] = res["estado"]
             n["estado_fecha"] = res["fecha"]
@@ -175,34 +222,48 @@ def main() -> int:
             n["resultado"] = f"Congreso: acuerdo de {res['estado']} ({res['id']})."
             n["resultado_fecha"] = res["fecha"]
             n["resultado_url"] = res["url"]
-        else:
-            lineas[-1] += "\n   " + res["url"]
+            n["resultado_numero"] = res.get("numero", "")
+            n["resultado_anio"] = res.get("anio", "")
+            aplicadas.append(n)
 
-    if not cambios:
+    if not novedades and not aplicadas:
         _log("[watchdog] sin novedades: la web sigue diciendo «pendiente» y es lo correcto")
         return 0
 
-    cuerpo = ("Resolución del Congreso publicada para el RDL de vivienda.\n"
-              + "\n".join(lineas))
-    if args.aplicar:
-        reg["actualizado"] = hoy.isoformat()
-        with open(NORMAS, "w", encoding="utf-8") as fh:
-            json.dump(reg, fh, ensure_ascii=False, indent=1)
-            fh.write("\n")
-        _log("[watchdog] registro actualizado; regenerando y comprobando")
-        for cmd in ([sys.executable, os.path.join(ROOT, "gen", "gen_vivienda.py")],
-                    [sys.executable, os.path.join(ROOT, "tests", "test_datos.py")]):
-            r = subprocess.run(cmd, capture_output=True, text=True)
-            _log(f"[watchdog] {' '.join(cmd[-1:])} rc={r.returncode} {r.stdout.strip()[-300:]}")
-            if r.returncode != 0:
-                _log(f"[watchdog] ERROR: {r.stderr.strip()[-600:]}")
-                _telegram(f"Watchdog vivienda: la regeneración falló (rc={r.returncode}). "
-                          f"Revisa el log del server.")
-                return 1
-    else:
-        cuerpo += "\n\nNo se aplicó nada todavía (--aplicar para escribirlo)."
-    _telegram(cuerpo)
-    _log(f"[watchdog] notificado ({cambios} norma/s)")
+    escrito_normas = False
+    if aplicadas:
+        reg["actualizado"] = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+        _escritura_atomica(NORMAS, reg)
+        escrito_normas = True
+        _log(f"[watchdog] registro actualizado ({len(aplicadas)} norma/s)")
+
+    # Aviso SOLO de lo nuevo, y SOLO se marca como notificado si el envío va bien.
+    if novedades:
+        lineas = "".join(
+            f"\n• {corta}: {res['estado']} ({res['id']}, {res['fecha']})\n   {res['url']}"
+            for corta, _clave, res in novedades)
+        cuerpo = ("Resolución del Congreso publicada para el RDL de vivienda:"
+                  + lineas)
+        if not args.aplicar:
+            cuerpo += "\n\nNo se aplicó nada todavía (--aplicar para escribirlo)."
+        if _enviar(cuerpo):
+            notificadas |= {clave for _c, clave, _r in novedades}
+            state = {"notificadas": sorted(notificadas)}
+            _escritura_atomica(ESTADO_F, state)
+            _log(f"[watchdog] notificado ({len(novedades)} nueva/s)")
+        else:
+            return 1
+
+    if escrito_normas:
+        _log("[watchdog] regenerando por staging (web_tmp + tests, swap solo si pasan)")
+        r = subprocess.run(["bash", os.path.join(ROOT, "scripts", "regen_publicar.sh")],
+                           capture_output=True, text=True)
+        _log(f"[watchdog] regen_publicar rc={r.returncode}")
+        if r.returncode != 0:
+            _log(f"[watchdog] regen_publicar stderr: {r.stderr.strip()[-500:]}")
+            _enviar("Watchdog vivienda: la regeneración por staging falló. Revisa logs/test.log.")
+            return 1
+        _log("[watchdog] web regenerada y publicada (tests OK)")
     return 0
 
 
