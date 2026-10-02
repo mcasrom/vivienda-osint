@@ -279,7 +279,7 @@ def _fuentes_html():
 </ul></div>
 <h2>4. Límites de la auditoría</h2>
 <div class="panel"><ul>
-<li><b>Licencias</b> de reutilización INE/CGPJ/BOE: por confirmar (uso citando fuente).</li>
+<li><b>Licencias</b>: INE y datos del observatorio, <b>CC BY 4.0</b>; CGPJ (datos judiciales públicos), BOE y MIVAU/SERPAVI, reutilización <b>citando la fuente</b>.</li>
 <li><b>Momentos distintos</b>: precios, registros, alquiler fiscal y lanzamientos no se combinan en un mismo gráfico.</li>
 <li><b>No se publica precio del alquiler por municipio ni provincia</b>: la muestra de anuncios disponible no da para una cifra defendible. El alquiler se publica solo como índice IPVA (INE), cuyo último dato es de 2024.</li>
 <li>El observatorio <b>no interpreta causalidad</b>.</li>
@@ -1094,7 +1094,7 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 <li><b>No se publica precio del alquiler por municipio ni por provincia.</b> La muestra de anuncios de que se dispone no permite una cifra defendible, y se prefiere no publicarla antes que publicar un número sin base suficiente.</li>
 <li><b>Sin puntuaciones compuestas</b> ni atribuciones: «Subiendo/Estable/Bajando» compara el último dato con el anterior de la misma fuente.</li>
 </ul>
-<p class="mut" style="font-size:.82rem">Licencias de reutilización de INE/CGPJ/BOE por confirmar. Generado {hoy}.</p></div>
+<p class="mut" style="font-size:.82rem">Licencias: <b>INE</b> y datos del observatorio, CC BY 4.0; <b>CGPJ</b> (datos judiciales públicos), <b>BOE</b> y <b>MIVAU/SERPAVI</b>, reutilización citando la fuente. Generado {hoy}.</p></div>
 
 <h2 id="apoyar">Apoyar</h2>
 <div class="panel" style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">

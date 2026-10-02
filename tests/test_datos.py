@@ -315,6 +315,48 @@ else:
     if os.path.exists(html_p):
         check('id="alquiler"' in page, "la portada no incluye la sección de alquiler SERPAVI")
 
+# ---------------------------------------------------------------------------
+# 15. Contrato de ingesta: la suma de CCAA debe cuadrar con el nacional
+# ---------------------------------------------------------------------------
+def _sum_csv(did, col):
+    p = os.path.join(WEB, "data", did + ".csv")
+    if not os.path.exists(p):
+        return None
+    with open(p, encoding="utf-8") as fh:
+        return sum(float(r[col]) for r in csv.DictReader(fh) if r.get(col))
+
+
+_eh = _sum_csv("ejecuciones-hipotecarias-ccaa", "ejecuciones")
+_pn = os.path.join(WEB, "data", "ejecuciones-hipotecarias-nacional.csv")
+if _eh is not None and os.path.exists(_pn):
+    with open(_pn, encoding="utf-8") as fh:
+        _nac = list(csv.DictReader(fh))
+    if _nac:
+        _last = float(_nac[-1]["ejecuciones"])
+        check(abs(_eh - _last) <= 1, f"EH: suma CCAA={_eh} != nacional={_last} ({_nac[-1].get('anio')})")
+else:
+    OMITIDO.append("ejecuciones (nacional/CCAA) para el contrato de suma")
+
+_lz = _sum_csv("lanzamientos-ccaa", "lanzamientos")
+_pc = os.path.join(WEB, "data", "lanzamientos-cronologia.csv")
+if _lz is not None and os.path.exists(_pc):
+    with open(_pc, encoding="utf-8") as fh:
+        _cron = list(csv.DictReader(fh))
+    if _cron:
+        _last = float(_cron[-1]["lanzamientos"])
+        check(abs(_lz - _last) <= 1,
+              f"LZ: suma CCAA={_lz} != nacional {_cron[-1].get('periodo')}={_last}")
+else:
+    OMITIDO.append("lanzamientos (cronología/CCAA) para el contrato de suma")
+
+_vut = _sum_csv("viviendas-turisticas-ccaa", "viviendas_turisticas")
+if _vut is not None and os.path.exists(json_latest):
+    _v = json.load(open(json_latest, encoding="utf-8"))["indicadores"].get("vut", {}).get("valor")
+    if _v:
+        check(abs(_vut - _v) <= 1, f"VUT: suma CCAA={_vut} != nacional={_v}")
+else:
+    OMITIDO.append("viviendas-turisticas-ccaa/latest.json para el contrato de suma")
+
 if FALLOS:
     print(f"FALLOS ({len(FALLOS)}):", file=sys.stderr)
     for f in FALLOS:
