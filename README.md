@@ -59,14 +59,21 @@ verificar.
 | `viviendas-turisticas-ccaa` | Viviendas de uso turístico | INE · tabla 46141 | anual |
 | `boe-vivienda` | Disposiciones del BOE sobre vivienda (sección I) | BOE | diario |
 | `punto-control` | Referencia (último dato publicado) vs último dato del panel | INE/CGPJ | diario |
+| `estado-fuentes` | Estado de actualización de cada fuente (ok, fecha, antigüedad) | cron | diaria |
 
 Todo se descarga desde [/datos.html](https://vivienda.pruebapublica.com/datos.html):
 
 - `web/data/<serie>.csv` y `.json`, **UTF-8 con coma y punto decimal** (machine-readable).
-- `web/data/latest.json` — el último dato de cada indicador, para consumidores ligeros.
+- `web/data/latest.json` — el último dato de cada indicador, para consumidores ligeros
+  (incluye, por indicador, `actualizado` y `edad_dias`: de cuándo es nuestra última incorporación).
 - `web/data/index.json` — catálogo con fuente, período, licencia y **n** por serie.
 - `web/llms.txt` — guía para asistentes de IA.
-- JSON-LD `Dataset` con 9 `distribution`/`DataDownload` en la portada.
+- JSON-LD `Dataset` con `distribution`/`DataDownload` por serie en la portada.
+
+**Frescura visible:** la portada tiene un bloque **«Estado de datos»** con ✓/⚠ por fuente
+(INE, CGPJ, BOE). Si una ingesta falla, muestra su **última versión válida** y su antigüedad:
+la web nunca presenta datos viejos como recién publicados. El estado vive en
+`data/frescura.json` (generado por el cron, fuera de git) y se publica como `estado-fuentes`.
 
 ## Cómo está construido
 

@@ -236,6 +236,38 @@ if os.path.exists(html_p):
             _reg_n = ""
         check(_reg_n != "", f"comparador: el IPV de la región no puede ser {_reg!r}")
 
+# ---------------------------------------------------------------------------
+# 12. Frescura de fuentes y edad del dato (F2)
+# ---------------------------------------------------------------------------
+FRESC = os.path.join(ROOT, "data", "frescura.json")
+if not os.path.exists(FRESC):
+    OMITIDO.append("data/frescura.json (no generado aún; lo escribe el cron)")
+else:
+    fr = json.load(open(FRESC, encoding="utf-8"))
+    fuentes = fr.get("fuentes") or {}
+    for fx in ("ine", "cgpj", "boe"):
+        check(fx in fuentes, f"frescura.json: falta la fuente '{fx}'")
+    for fx, e in fuentes.items():
+        check(isinstance(e.get("ok"), bool),
+              f"frescura.json/{fx}: 'ok' debe ser booleano, no {e.get('ok')!r}")
+        act = e.get("actualizado")
+        check(act is None or bool(re.match(r"^\d{4}-\d{2}-\d{2}$", str(act))),
+              f"frescura.json/{fx}: 'actualizado' no es ISO date: {act!r}")
+    if os.path.exists(html_p):
+        check('id="estado"' in page,
+              "la portada no incluye el bloque «Estado de datos» (id=estado)")
+    if os.path.exists(json_latest):
+        _ind3 = json.load(open(json_latest, encoding="utf-8"))["indicadores"]
+        for k, iv in _ind3.items():
+            check("actualizado" in iv, f"latest.json/{k}: falta 'actualizado'")
+            check("edad_dias" in iv, f"latest.json/{k}: falta 'edad_dias'")
+            ed = iv.get("edad_dias")
+            check(ed is None or isinstance(ed, int),
+                  f"latest.json/{k}: 'edad_dias' no es entero ni None: {ed!r}")
+    if any((fuentes.get(k) or {}).get("ok") is not None for k in ("ine", "cgpj", "boe")):
+        check(os.path.exists(os.path.join(WEB, "data", "estado-fuentes.csv")),
+              "web/data/estado-fuentes.csv no se generó (frescura con estado)")
+
 if FALLOS:
     print(f"FALLOS ({len(FALLOS)}):", file=sys.stderr)
     for f in FALLOS:

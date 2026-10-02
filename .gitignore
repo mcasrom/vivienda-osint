@@ -3,6 +3,8 @@ __pycache__/
 .env
 venv/
 data/*.db
+data/frescura.json
+data/frescura.json.tmp
 logs/
 web/index.html
 web/fuentes.html

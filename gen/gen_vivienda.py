@@ -9,7 +9,7 @@ from datetime import date
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from ingest import boe as boeing, via, ine, cgpj, territorios  # noqa: E402
+from ingest import boe as boeing, via, ine, cgpj, territorios, frescura  # noqa: E402
 
 # Directorio de salida: por defecto web/ (público); el cron/publicar por staging
 # usa web_tmp/ y solo intercambia si el contrato de datos pasa (regla: publicar
@@ -360,7 +360,7 @@ def bloque_barras(pares, color, fmt=None, unidad="", top=10, grupo="grupos"):
     return grafico
 
 
-def _ind(valor, unidad, tend, etq_tend, fuente, periodo):
+def _ind(valor, unidad, tend, etq_tend, fuente, periodo, edad=None):
     # Una variación que «se modera» NO es una bajada: el nivel sigue subiendo, lo que
     # se frena es su ritmo (IPV +12,2 % anual). Pintarla con la flecha de «bajando» hacía
     # que una tarjeta en verde con un número positivo se leyera como precio en caída.
@@ -371,11 +371,42 @@ def _ind(valor, unidad, tend, etq_tend, fuente, periodo):
         cls = {"subiendo": "up", "bajando": "down", "estable": ""}.get(tend, "")
         fl = {"subiendo": "▲", "bajando": "▼", "estable": "▬"}.get(tend, "")
     return (f'<div class="ind"><div class="v">{valor}<small>{unidad}</small></div>'
-            f'<div class="t {cls}">{fl} {etq_tend}</div><div class="f">{etiqueta_src(fuente, periodo)}</div></div>')
+            f'<div class="t {cls}">{fl} {etq_tend}</div><div class="f">{etiqueta_src(fuente, periodo, edad)}</div></div>')
 
 
-def etiqueta_src(f, p):
-    return f'{f}<br><span class="mut">{p}</span>'
+def etiqueta_src(f, p, edad=None):
+    # `edad` = días desde la última incorporación correcta de la fuente (o None).
+    # Se añade DENTRO del mismo <span> para no romper el contrato del test (§10).
+    extra = ""
+    if edad is not None:
+        extra = " · incorporado hoy" if edad == 0 else f" · incorporado hace {edad} d"
+    return f'{f}<br><span class="mut">{p}{extra}</span>'
+
+
+def _estado_datos(est):
+    """Bloque «Estado de datos»: ✓/⚠ por fuente con la última incorporación válida.
+
+    Hace visible un fallo de ingesta que hoy solo quedaba en el log (regla 24b):
+    si una fuente no se actualiza, muestra su última versión válida y su antigüedad.
+    """
+    filas = []
+    for k in ("ine", "cgpj", "boe"):
+        e = est.get(k, {}) or {}
+        nom = e.get("nombre", k.upper())
+        if e.get("ok") is True:
+            ic = '<span style="color:#15803d" title="ok">✓</span>'
+            txt = (f'incorporado {_fd(e["actualizado"])}' if e.get("actualizado")
+                   else 'incorporado')
+        elif e.get("ok") is False:
+            ic = '<span style="color:#b45309" title="fallo">⚠</span>'
+            txt = (f'<b>sin actualizar</b> · última válida {_fd(e["ultima_ok"])}'
+                   + (f' (hace {e["edad_dias"]} d)' if e.get("edad_dias") is not None else '')
+                   if e.get("ultima_ok") else '<b>sin incorporación válida</b>')
+        else:
+            ic = '<span class="mut">·</span>'
+            txt = 'sin estado'
+        filas.append(f'<div class="m"><span class="d">{ic} {E(nom)}</span> {txt}</div>')
+    return "".join(filas)
 
 
 def svg_line(serie, color="#0f766e", w=780, h=210, marcas=(), fmt=None):
@@ -436,6 +467,9 @@ def _eurp(v):
 def build():
     v = via.resumen()
     hoy = date.today().isoformat()
+    est = frescura.estado()          # estado por fuente (F2): ✓/⚠ + edad del dato
+    ed_ine = (est.get("ine") or {}).get("edad_dias")
+    ed_cgpj = (est.get("cgpj") or {}).get("edad_dias")
     region_cod = "14"                       # Murcia (código INE)
     region = territorios.NOMBRE[region_cod]
 
@@ -496,14 +530,16 @@ def build():
     tend, _ = _tendencia(ipv)
     inds = "".join([
         _ind(_pct(ipv_ult), "", tend, _etq_var(tend), "INE · IPV (compraventa)",
-             "variación anual · " + per_ipv + (f" · nueva {_pct(nueva)}, 2.ª mano {_pct(seg)}" if nueva and seg else "")),
+             "variación anual · " + per_ipv + (f" · nueva {_pct(nueva)}, 2.ª mano {_pct(seg)}" if nueva and seg else ""),
+             edad=ed_ine),
         _ind(_pct(ipva_var), "", tend_ia, _etq_var(tend_ia), "INE · IPVA (alquiler)",
-             "variación anual · " + per_ipva),
+             "variación anual · " + per_ipva, edad=ed_ine),
         _ind((f"{int(lz_total):,}".replace(",", ".") if lz_total else "—"), "", tend_lz, _etq_nivel(tend_lz),
-             "CGPJ · lanzamientos (desahucios)", per_lz),
+             "CGPJ · lanzamientos (desahucios)", per_lz, edad=ed_cgpj),
         _ind((f"{int(eh_total):,}".replace(",", ".") if eh_total else "—"), "", tend_eh, _etq_nivel(tend_eh),
-             "INE · ejecuciones hipotecarias", per_eh),
+             "INE · ejecuciones hipotecarias", per_eh, edad=ed_ine),
     ])
+    estado_datos = _estado_datos(est)
 
     eh_bars = "".join(
         f'<tr><td>{E(k)}</td><td class="num">{int(v):,}</td>'.replace(",", ".") + "</tr>"
@@ -645,6 +681,17 @@ def build():
                    "varias (INE/CGPJ)", "ver columnas de periodo", "varias — ver fuente",
                    ["indicador", "referencia", "periodo_referencia", "ultimo", "periodo_ultimo", "fuente"],
                    ctrl_rows, datasets)
+    # Estado de frescura por fuente (F2): dato operativo, se publica por transparencia.
+    if any((est.get(k) or {}).get("ok") is not None for k in ("ine", "cgpj", "boe")):
+        _write_dataset("estado-fuentes", "Estado de actualización de las fuentes",
+                       "cron del observatorio", "diaria", "CC BY 4.0",
+                       ["fuente", "ok", "actualizado", "edad_dias", "ultima_ok"],
+                       [{"fuente": (est.get(k) or {}).get("nombre", k.upper()),
+                         "ok": (est.get(k) or {}).get("ok"),
+                         "actualizado": (est.get(k) or {}).get("actualizado") or "",
+                         "edad_dias": (est.get(k) or {}).get("edad_dias"),
+                         "ultima_ok": (est.get(k) or {}).get("ultima_ok") or ""}
+                        for k in ("ine", "cgpj", "boe")], datasets)
     with open(os.path.join(DATA_DIR, "index.json"), "w", encoding="utf-8") as f:
         json.dump({"observatorio": "Observatorio de la vivienda",
                    "url": "https://vivienda.pruebapublica.com/", "generado": hoy, "series": datasets},
@@ -663,8 +710,10 @@ def build():
         val, per = _vp(ind_now.get(k))
         t, tipo = _tm.get(k, ("", ""))
         etq = _etq_var(t) if tipo == "var" else _etq_nivel(t) if tipo == "nivel" else ""
+        _e = est.get(src.lower(), {}) or {}
         indicadores[k] = {"indicador": tt, "valor": val, "periodo": per, "unidad": _uni.get(k, ""),
-                          "fuente": src, "tendencia": etq}
+                          "fuente": src, "tendencia": etq,
+                          "actualizado": _e.get("actualizado"), "edad_dias": _e.get("edad_dias")}
     with open(os.path.join(DATA_DIR, "latest.json"), "w", encoding="utf-8") as f:
         json.dump({"observatorio": "Observatorio de la vivienda",
                    "url": "https://vivienda.pruebapublica.com/", "generado": hoy,
@@ -780,6 +829,11 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 </div></header>
 <div class="inds" id="indicadores">{inds}</div>
 <main>
+<div class="panel" id="estado" style="margin-bottom:8px">
+<p style="margin:0 0 6px;font-size:.9rem"><b>Estado de los datos</b> <span class="mut">· última incorporación correcta de cada fuente (diaria)</span></p>
+{estado_datos}
+<p class="mut" style="margin:8px 0 0;font-size:.78rem">Si una fuente no responde, el día no se actualiza y aquí aparece su <b>última versión válida</b>: la web nunca presenta datos viejos como recién publicados.</p>
+</div>
 <h2>Precio de compraventa de vivienda, variación anual <span>· IPV nacional (INE)</span></h2>
 <div class="panel">{svg_line(ipv)}<p class="mut" style="font-size:.8rem">Índice de Precios de Vivienda (IPV), total nacional, variación anual (%). Fuente: <a href="https://www.ine.es/">INE</a>. Las medidas del BOE se registran abajo.</p>{_descarga("precios-ipv")}</div>
 
