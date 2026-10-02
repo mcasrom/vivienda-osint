@@ -170,6 +170,51 @@ def vte_ccaa():
     return territorios.ordenar(rows), anyo, (tot[0] if tot else None), (pct[0] if pct else None)
 
 
+def ingest_etdp() -> int:
+    """ETDP (tabla 49280): compraventas de viviendas por CCAA (anual)."""
+    c = _con()
+    c.execute("DELETE FROM ine_serie WHERE serie LIKE 'cv:%'")   # reingesta autoritativa
+    n = 0
+    ccaa_code = {nm.lower(): cd for cd, nm in territorios.NOMBRE.items()}
+    for s in _get("https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA/49280?nult=20&tip=A"):
+        nom = s.get("Nombre", "")
+        partes = nom.split(". ")
+        if len(partes) < 3 or partes[1] != "General" or not partes[2].startswith("Compraventa"):
+            continue
+        amb = partes[0].strip()
+        if amb != "Total Nacional" and amb.lower() not in ccaa_code:
+            continue
+        for x in s.get("Data", []):
+            if x.get("Valor") is None or x.get("Anyo") is None:
+                continue
+            anio = str(x.get("Anyo"))
+            n += c.execute("INSERT OR REPLACE INTO ine_serie VALUES(?,?,?,?)",
+                           ("cv:" + amb, anio, amb, float(x["Valor"]))).rowcount
+    c.commit()
+    return n
+
+
+def cv_ccaa():
+    """[(ccaa, compraventas)] del último mes + total nacional."""
+    c = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
+    fecha = c.execute("SELECT MAX(fecha) FROM ine_serie WHERE serie LIKE 'cv:%'").fetchone()[0]
+    rows = c.execute("SELECT etiqueta, valor FROM ine_serie WHERE serie LIKE 'cv:%' "
+                     "AND fecha=? AND etiqueta<>'Total Nacional' ORDER BY valor DESC", (fecha,)).fetchall()
+    tot = c.execute("SELECT valor FROM ine_serie WHERE serie='cv:Total Nacional' AND fecha=?",
+                    (fecha,)).fetchone()
+    return territorios.ordenar(rows), fecha, (tot[0] if tot else None)
+
+
+def cv_nacional():
+    """[(anio, valor)] de la serie nacional de compraventas (anual)."""
+    try:
+        c = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
+        return c.execute("SELECT fecha, valor FROM ine_serie WHERE serie='cv:Total Nacional' "
+                         "ORDER BY fecha").fetchall()
+    except Exception:
+        return []
+
+
 def eh_nacional():
     """[(año, valor)] de la serie nacional de ejecuciones hipotecarias."""
     try:
@@ -193,4 +238,4 @@ def ultimo(nombre: str):
 
 
 if __name__ == "__main__":
-    print(f"[ine] puntos actualizados: {ingest()} · EH: {ingest_eh()} · VTE: {ingest_vte()}")
+    print(f"[ine] puntos actualizados: {ingest()} · EH: {ingest_eh()} · VTE: {ingest_vte()} · CV: {ingest_etdp()}")

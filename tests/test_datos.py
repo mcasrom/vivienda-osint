@@ -43,7 +43,7 @@ FALLOS: list[str] = []
 OMITIDO: list[str] = []
 
 # Tabla canónica: todo nombre de CCAA publicado debe salir de aquí.
-CCAA_CSV = ("ejecuciones-hipotecarias-ccaa", "viviendas-turisticas-ccaa", "lanzamientos-ccaa")
+CCAA_CSV = ("ejecuciones-hipotecarias-ccaa", "compraventas-ccaa", "viviendas-turisticas-ccaa", "lanzamientos-ccaa")
 
 
 def check(cond: bool, msg: str) -> None:
@@ -149,7 +149,7 @@ if os.path.exists(html_p):
     check(len(bloques) == len(CCAA_CSV),
           f"se esperaban {len(CCAA_CSV)} bloques de detalle CCAA en la página y hay {len(bloques)}")
     # orden en la página: ejecuciones (EH), lanzamientos (LZ), viviendas turísticas (VUT)
-    orden_pagina = ("ejecuciones-hipotecarias-ccaa", "lanzamientos-ccaa", "viviendas-turisticas-ccaa")
+    orden_pagina = ("ejecuciones-hipotecarias-ccaa", "compraventas-ccaa", "lanzamientos-ccaa", "viviendas-turisticas-ccaa")
     for (anunciado, cuerpo), did in zip(bloques, orden_pagina):
         filas = re.findall(r"<tr><td>([^<]+)</td><td class=\"num\">([^<]*)</td></tr>", cuerpo)
         check(len(filas) == int(anunciado),
@@ -356,6 +356,23 @@ if _vut is not None and os.path.exists(json_latest):
         check(abs(_vut - _v) <= 1, f"VUT: suma CCAA={_vut} != nacional={_v}")
 else:
     OMITIDO.append("viviendas-turisticas-ccaa/latest.json para el contrato de suma")
+
+# ---------------------------------------------------------------------------
+# 16. Compraventas (ETDP): suma CCAA = nacional + sección
+# ---------------------------------------------------------------------------
+_cv = _sum_csv("compraventas-ccaa", "compraventas")
+_pcv = os.path.join(WEB, "data", "compraventas-nacional.csv")
+if _cv is not None and os.path.exists(_pcv):
+    with open(_pcv, encoding="utf-8") as fh:
+        _cvn = list(csv.DictReader(fh))
+    if _cvn:
+        _last = float(_cvn[-1]["compraventas"])
+        check(abs(_cv - _last) <= 1,
+              f"Compraventas: suma CCAA={_cv} != nacional {_cvn[-1].get('periodo')}={_last}")
+    if os.path.exists(html_p):
+        check('id="compraventas"' in page, "la portada no incluye la sección de compraventas")
+else:
+    OMITIDO.append("compraventas (nacional/CCAA) para el contrato de suma")
 
 if FALLOS:
     print(f"FALLOS ({len(FALLOS)}):", file=sys.stderr)

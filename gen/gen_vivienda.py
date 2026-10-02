@@ -564,6 +564,10 @@ def build():
     eh_nac = ine.eh_nacional()
     eh_crono = " · ".join(f"{a} <b>{int(v):,}</b>".replace(",", ".") for a, v in eh_nac)
     eh_tot_txt = f"{int(eh_total):,}".replace(",", ".") if eh_total else "—"
+    cv, cv_fecha, cv_total = ine.cv_ccaa()
+    cv_serie = ine.cv_nacional()
+    per_cv = cv_fecha or "—"
+    cv_tot_txt = f"{int(cv_total):,}".replace(",", ".") if cv_total else "—"
     vut, vut_anyo, vut_total, vut_pct = ine.vte_ccaa()
     vut_tot_txt = f"{int(vut_total):,}".replace(",", ".") if vut_total else "—"
     # tasas por 1.000 viviendas (denominador = total de viviendas censadas,
@@ -817,6 +821,13 @@ def build():
     _write_dataset("ejecuciones-hipotecarias-nacional", "Ejecuciones hipotecarias de vivienda (nacional)",
                    "INE · tabla 10740", "anual", "INE — reutilización citando fuente",
                    ["anio", "ejecuciones"], [{"anio": a, "ejecuciones": int(v)} for a, v in eh_nac], datasets)
+    _write_dataset("compraventas-ccaa", "Compraventas de vivienda por CCAA", "INE · ETDP (tabla 49280)",
+                   per_cv, "INE — reutilización citando fuente",
+                   ["ccaa", "compraventas"], [{"ccaa": k, "compraventas": int(v)} for k, v in cv], datasets)
+    _write_dataset("compraventas-nacional", "Compraventas de vivienda (nacional)", "INE · ETDP (tabla 49280)",
+                   "anual", "INE — reutilización citando fuente",
+                   ["periodo", "compraventas"],
+                   [{"periodo": p, "compraventas": int(v)} for p, v in cv_serie], datasets)
     _write_dataset("lanzamientos-ccaa", "Lanzamientos (desahucios) por CCAA", "CGPJ · Efecto de la crisis",
                    per_lz, "CGPJ — datos judiciales públicos",
                    ["ccaa", "lanzamientos"], [{"ccaa": k, "lanzamientos": int(v)} for k, v in lz], datasets)
@@ -1031,6 +1042,13 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 {svg_line([(str(a), v) for a, v in eh_nac], color="#0f766e", fmt=lambda v: f"{int(v):,}".replace(",", "."))}
 <p class="mut" style="font-size:.8rem">Ejecuciones hipotecarias <b>iniciadas sobre vivienda</b>, por CCAA. <b>Total nacional {eh_tot_txt}</b>. Fuente: <a href="https://www.ine.es/">INE</a>.</p>
 <p class="mut" style="font-size:.8rem">Nota: los <b>lanzamientos (desahucios)</b> los publica el <b>CGPJ</b> (trimestral; próximo 16-oct-2026).</p>{_descarga("ejecuciones-hipotecarias-ccaa")}</div>
+
+<h2 id="compraventas">Compraventas de vivienda por CCAA <span>· ETDP (INE){f" · {per_cv}" if cv_fecha else ""}</span></h2>
+<div class="panel">
+{bloque_barras(cv, color="#0369a1", fmt=lambda v: f"{int(v):,}".replace(",", "."), unidad="", grupo="comunidades autónomas")}
+<p style="font-size:.85rem;margin:18px 0 2px"><b>Cronología nacional</b> · compraventas por año</p>
+{svg_line([(str(a), v) for a, v in cv_serie], color="#0369a1", fmt=lambda v: f"{int(v):,}".replace(",", "."))}
+<p class="mut" style="font-size:.8rem">Compraventas de vivienda <b>inscritas</b> (ETDP, INE), por CCAA. Total {per_cv}: <b>{cv_tot_txt}</b>. Fuente: <a href="https://www.ine.es/">INE</a>.</p>{_descarga("compraventas-ccaa")}</div>
 
 <h2>Lanzamientos (desahucios) por CCAA <span>· CGPJ{f" · {lz_per}" if lz_per else ""}</span></h2>
 <div class="panel">
