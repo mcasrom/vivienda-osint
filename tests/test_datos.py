@@ -199,6 +199,28 @@ if os.path.exists(json_latest) and os.path.exists(html_p):
         check(ind[k]["periodo"] in per_txt,
               f"{k}: periodo {per_txt.strip()!r} en la tarjeta y {ind[k]['periodo']!r} en latest.json")
 
+# ---------------------------------------------------------------------------
+# 11. Comparador España↔región: el IPV regional es real, no un placeholder
+# ---------------------------------------------------------------------------
+if not os.path.exists(html_p):
+    OMITIDO.append("web/index.html (generado)")
+if os.path.exists(html_p):
+    fila_ipv = re.search(
+        r'<tr><td>Compraventa \(IPV, var\. anual\)</td><td>([^<]*)</td>'
+        r'<td class="num">([^<]*)</td><td class="num">([^<]*)</td></tr>', page)
+    check(fila_ipv is not None, "la página no tiene la fila del comparador de IPV")
+    if fila_ipv:
+        _per_es, _esp, _reg = fila_ipv.groups()
+        check(_esp.strip() != "no ingestado por CCAA",
+              "comparador: la celda de España dice «no ingestado por CCAA»")
+        _reg_n = _reg.replace(".", "").replace(",", ".").rstrip("% ")
+        try:
+            float(_reg_n)
+        except ValueError:
+            FALLOS.append(f"comparador: celda IPV de la región no numérica: {_reg!r}")
+            _reg_n = ""
+        check(_reg_n != "", f"comparador: el IPV de la región no puede ser {_reg!r}")
+
 if FALLOS:
     print(f"FALLOS ({len(FALLOS)}):", file=sys.stderr)
     for f in FALLOS:

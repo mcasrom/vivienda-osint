@@ -15,6 +15,10 @@ OUT = os.path.join(ROOT, "web", "index.html")
 DATA_DIR = os.path.join(ROOT, "web", "data")
 E = html.escape
 
+# Versión del microservicio (una sola fuente: se muestra en el footer de todas
+# las páginas generadas y debe coincidir con el tag/la release del repo).
+VERSION = "0.1.0"
+
 # --- Registro de normas: estado y fechas (FUENTE ÚNICA) -------------------
 # El estado vive en data/normas.json y solo se cambia con fuente oficial (BOE o
 # Resolución del Congreso). No se infiere ni se anticipa. Los títulos oficiales
@@ -244,7 +248,7 @@ def _shell(titulo, desc, canonical, h1, intro, body, active=""):
 {nav}
 <header class="hero"><div class="wrap"><h1>{h1}</h1><p>{intro}</p></div></header>
 <main>{body}</main>
-<footer>Observatorio de la vivienda · <a href="https://pruebapublica.com">pruebapublica.com</a> · datos de fuentes públicas · <a href="/fuentes.html">Fuentes y auditoría</a></footer>
+<footer>Observatorio de la vivienda · <a href="https://pruebapublica.com">pruebapublica.com</a> · datos de fuentes públicas · <a href="/fuentes.html">Fuentes y auditoría</a> · <a href="https://github.com/mcasrom/vivienda-osint" target="_blank" rel="noopener">código abierto</a> · v{VERSION}</footer>
 </body></html>"""
 
 
@@ -507,9 +511,18 @@ def build():
         if k == region:            # nombre canónico exacto (antes: startswith, que rompía al canonicizar)
             reg_lz, reg_lz_nom = val, k
             break
-    comp_rows = "".join(
-        f'<tr><td>Compraventa (IPV, var. anual)</td><td>{E(per_ipv)}</td><td class="num">{_pct(ipv_ult)}</td><td class="num mut">no ingestado por CCAA</td></tr>'
-        f'<tr><td>Lanzamientos judiciales</td><td>{E(per_lz)}</td><td class="num">{_fmtv("int", lz_total)}</td><td class="num">{_fmtv("int", reg_lz) if reg_lz is not None else "sin dato"}</td></tr>')
+    ipv_ccaa = ine.serie(f"ipv_var_anual:{region_cod}")
+    ipv_ccaa_ult = ine.ultimo(f"ipv_var_anual:{region_cod}")
+    per_ipv_ccaa = ipv_ccaa[-1][0] if ipv_ccaa else None
+    ipv_row = (f'<tr><td>Compraventa (IPV, var. anual)</td><td>{E(per_ipv)}</td>'
+               f'<td class="num">{_pct(ipv_ult)}</td>'
+               + (f'<td class="num">{_pct(ipv_ccaa_ult)}</td></tr>'
+                  if ipv_ccaa_ult is not None
+                  else '<td class="num mut">sin dato CCAA</td></tr>'))
+    lz_row = (f'<tr><td>Lanzamientos judiciales</td><td>{E(per_lz)}</td>'
+              f'<td class="num">{_fmtv("int", lz_total)}</td>'
+              f'<td class="num">{_fmtv("int", reg_lz) if reg_lz is not None else "sin dato"}</td></tr>')
+    comp_rows = ipv_row + lz_row
 
     filas_med = "".join(
         f'<div class="m"><span class="d">{E(d)}</span> <b>{E(t)}</b> '
@@ -816,7 +829,7 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
   <a href="https://ko-fi.com/m_castillo" target="_blank" rel="noopener" style="background:var(--accent);color:#fff;font-weight:700;padding:13px 24px;border-radius:10px;text-decoration:none;white-space:nowrap">☕ Apoyar en Ko-fi →</a>
 </div>
 </main>
-<footer>Observatorio de la vivienda · microservicio de <a href="https://pruebapublica.com">pruebapublica.com</a> · datos solo de fuentes <b>públicas</b> (INE/CGPJ/BOE).<br>No analiza redes ni coordinación: solo hechos oficiales y su evolución.</footer>
+<footer>Observatorio de la vivienda · microservicio de <a href="https://pruebapublica.com">pruebapublica.com</a> · datos solo de fuentes <b>públicas</b> (INE/CGPJ/BOE).<br>No analiza redes ni coordinación: solo hechos oficiales y su evolución · <a href="https://github.com/mcasrom/vivienda-osint" target="_blank" rel="noopener">código abierto</a> · v{VERSION}</footer>
 </body></html>"""
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:

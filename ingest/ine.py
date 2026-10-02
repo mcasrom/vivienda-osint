@@ -52,13 +52,21 @@ def ingest() -> int:
                 continue
             n += c.execute("INSERT OR REPLACE INTO ine_serie VALUES(?,?,?,?)",
                            (key, x.get("Fecha", "")[:10], _etq(x), float(x["Valor"]))).rowcount
-    # IPV (compraventa, nacional general)
+    # IPV (compraventa): nacional + variación anual por CCAA (misma tabla 80270).
+    # Antes solo se guardaba el «Nacional. General», así que el comparador regional
+    # quedaba «no ingestado por CCAA» aunque el INE sí publica la serie por CCAA.
+    ccaa_code = {n.lower(): c for c, n in territorios.NOMBRE.items()}
     for s in _get(f"https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA/{TABLAS['ipv']}?nult=12&tip=AM"):
         nom = s.get("Nombre", "")
-        key = ("ipv_indice" if nom == "Nacional. General. Índice. "
-               else "ipv_var_anual" if nom == "Nacional. General. Variación anual. "
-               else "ipv_nueva_var" if nom == "Nacional. Vivienda nueva. Variación anual. "
-               else "ipv_segunda_var" if nom == "Nacional. Vivienda de segunda mano. Variación anual. " else None)
+        if nom.startswith("Nacional."):
+            key = ("ipv_indice" if nom == "Nacional. General. Índice. "
+                   else "ipv_var_anual" if nom == "Nacional. General. Variación anual. "
+                   else "ipv_nueva_var" if nom == "Nacional. Vivienda nueva. Variación anual. "
+                   else "ipv_segunda_var" if nom == "Nacional. Vivienda de segunda mano. Variación anual. " else None)
+        else:
+            pref, _, resto = nom.partition(". ")
+            cod = ccaa_code.get(pref.strip().lower())
+            key = f"ipv_var_anual:{cod}" if cod is not None and resto == "General. Variación anual. " else None
         if not key:
             continue
         for x in s.get("Data", []):
