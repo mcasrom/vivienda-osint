@@ -1,14 +1,25 @@
 {
-  "actualizado": "2026-10-02T07:45:00Z",
+  "actualizado": "2026-10-02T18:14:03Z",
   "nota": "Estado de las normas registradas en el observatorio. El estado se actualiza solo con fuente oficial (BOE o Resolución del Congreso); no se infiere ni se anticipa. Los títulos oficiales completos se leen de la tabla boe (ingest/boe.py), no se duplican aquí.",
-  "estados": ["publicada", "en_votacion", "convalidada", "derogada"],
+  "estados": [
+    "publicada",
+    "en_votacion",
+    "convalidada",
+    "derogada"
+  ],
   "marco": {
     "descripcion": "El artículo 86.2 CE obliga al Congreso de los Diputados a pronunciarse expresamente, dentro de los treinta días siguientes a la promulgación, sobre la convalidación o la derogación del Decreto-ley.",
     "url": "https://www.boe.es/buscar/act.php?bj=a86&id=BOE-A-1978-31229&tn=5",
     "registro": "El acuerdo se publica como Resolución del Congreso de los Diputados en el BOE, sección I, dentro de los días siguientes a la votación.",
     "ejemplos": [
-      {"etiqueta": "convalidación (RDL 2/2023, BOE-A-2023-8221)", "url": "https://www.boe.es/diario_boe/txt.php?id=BOE-A-2023-8221"},
-      {"etiqueta": "derogación (RDL 2/2026, BOE-A-2026-4667)", "url": "https://www.boe.es/diario_boe/txt.php?id=BOE-A-2026-4667"}
+      {
+        "etiqueta": "convalidación (RDL 2/2023, BOE-A-2023-8221)",
+        "url": "https://www.boe.es/diario_boe/txt.php?id=BOE-A-2023-8221"
+      },
+      {
+        "etiqueta": "derogación (RDL 2/2026, BOE-A-2026-4667)",
+        "url": "https://www.boe.es/diario_boe/txt.php?id=BOE-A-2026-4667"
+      }
     ]
   },
   "normas": [
@@ -22,12 +33,20 @@
       "boe": "2026-09-30",
       "vigencia": "2026-10-01",
       "vigencia_nota": "Entrada en vigor al día siguiente de su publicación (disposición final undécima), sin perjuicio de la convalidación o derogación por el Congreso (art. 86.2 CE).",
-      "estado": "en_votacion",
+      "estado": "derogada",
       "estado_fecha": "2026-10-02",
-      "estado_nota": "Pendiente de la votación del Congreso. El observatorio no anticipa el resultado.",
-      "votacion": {"fecha": "2026-10-02", "hora": "11:00", "organo": "Congreso de los Diputados"},
-      "resultado": null,
-      "resultado_fecha": null
+      "estado_nota": "El Congreso acordó su derogación el 2-oct-2026 (art. 86.2 CE): las medidas del decreto quedan sin efecto.",
+      "votacion": {
+        "fecha": "2026-10-02",
+        "hora": "11:00",
+        "organo": "Congreso de los Diputados"
+      },
+      "resultado": "Derogado por el Congreso de los Diputados (Resolución de 2 de octubre de 2026).",
+      "resultado_fecha": "2026-10-02",
+      "resultado_url": "https://www.boe.es/diario_boe/txt.php?id=BOE-A-2026-20526",
+      "resultado_numero": "20526",
+      "resultado_anio": "2026",
+      "resultado_boe": "BOE-A-2026-20526"
     },
     {
       "id": "BOE-A-2026-20385",
@@ -39,12 +58,20 @@
       "boe": "2026-10-01",
       "vigencia": "2026-10-02",
       "vigencia_nota": "Entrada en vigor al día siguiente de su publicación (disposición final segunda), sin perjuicio de la convalidación o derogación por el Congreso (art. 86.2 CE).",
-      "estado": "en_votacion",
+      "estado": "derogada",
       "estado_fecha": "2026-10-02",
-      "estado_nota": "Pendiente de la votación del Congreso. El observatorio no anticipa el resultado.",
-      "votacion": {"fecha": "2026-10-02", "hora": "11:00", "organo": "Congreso de los Diputados"},
-      "resultado": null,
-      "resultado_fecha": null
+      "estado_nota": "El Congreso acordó su derogación el 2-oct-2026 (art. 86.2 CE): las medidas del decreto quedan sin efecto.",
+      "votacion": {
+        "fecha": "2026-10-02",
+        "hora": "11:00",
+        "organo": "Congreso de los Diputados"
+      },
+      "resultado": "Derogado por el Congreso de los Diputados (Resolución de 2 de octubre de 2026).",
+      "resultado_fecha": "2026-10-02",
+      "resultado_url": "https://www.boe.es/diario_boe/txt.php?id=BOE-A-2026-20527",
+      "resultado_numero": "20527",
+      "resultado_anio": "2026",
+      "resultado_boe": "BOE-A-2026-20527"
     }
   ]
 }

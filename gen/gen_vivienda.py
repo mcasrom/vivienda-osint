@@ -717,8 +717,12 @@ def build():
                    f'{E(vot.get("organo", ""))}, {_fd(vot.get("fecha", ""))} {E(vot.get("hora", ""))}. '
                    f'<b>Resultado pendiente.</b> {E(n.get("estado_nota", ""))}</div>')
         elif n.get("resultado"):
-            res = (f'<div class="mut" style="font-size:.8rem">Resultado registrado: {E(n["resultado"])} '
-                   f'({_fd(n.get("resultado_fecha") or "")}).</div>')
+            _u = n.get("resultado_url")
+            _boe = n.get("resultado_boe") or ""
+            res = (f'<div class="mut" style="font-size:.8rem">Resultado: {E(n["resultado"])}'
+                   + (f' <a class="src" href="{E(_u)}" target="_blank" rel="noopener">'
+                      f'Resolución del Congreso{f" ({E(_boe)})" if _boe else ""} ↗</a>' if _u else "")
+                   + '</div>')
         _fichas.append(
             f'<div class="card"><div class="fecha">{E(ESTADO_TXT.get(n["estado"], n["estado"]))} · '
             f'{E(n["corta"])} · {E(n["ambito"])}</div><div class="tit">{E(titulo)}</div>'
@@ -882,8 +886,9 @@ def build():
 
 ## Límites
 - No se afirma causalidad; el punto de control usa la referencia por periodo de cada serie.
-- Los datos publicados miden periodos anteriores a los RDL de 29-sep-2026; la primera lectura
-  posterior es el 4T-2026 (~feb-2027).
+- Los datos publicados describen periodos anteriores a los RDL de 29-sep-2026. El Congreso
+  acordó su derogación el 2-oct-2026 (art. 86.2 CE): sus medidas quedan sin efecto. La primera
+  lectura posterior a los RDL (4T-2026) llegará en ~feb-2027.
 - El IPVA (alquiler) es un índice anual: describe la variación, no un precio por m², y su
   último dato es de 2024.
 """
@@ -989,9 +994,9 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 
 <h2 id="control">Punto de control · decretos de sep–oct 2026</h2>
 <div class="panel">
-<p style="margin:0 0 12px">Los RDL 26/2026 y 27/2026 fueron aprobados el {_txt_ap} y publicados en el BOE el {_txt_bo}. La <b>referencia</b> es el último dato disponible de cada serie <b>en su propio periodo</b> (no una fecha de corte): precios (IPV/IPVA), lanzamientos (CGPJ), ejecuciones (INE) y viviendas turísticas (VUT).</p>
+<p style="margin:0 0 12px">Los RDL 26/2026 y 27/2026 fueron aprobados el {_txt_ap} y publicados en el BOE el {_txt_bo}. <b>El Congreso acordó su derogación el 2-oct-2026</b> (art. 86.2 CE), de modo que <b>sus medidas quedan sin efecto</b>. La <b>referencia</b> es el último dato disponible de cada serie <b>en su propio periodo</b> (no una fecha de corte): precios (IPV/IPVA), lanzamientos (CGPJ), ejecuciones (INE) y viviendas turísticas (VUT).</p>
 <table><thead><tr><th>Indicador</th><th class="num">Referencia · valor · periodo</th><th class="num">Último dato · valor · periodo</th><th class="num">Δ</th><th>Fuente</th></tr></thead><tbody>{filas_control}</tbody></table>
-<p class="mut" style="font-size:.8rem">⚠️ <b>Ninguna serie publicada mide todavía el periodo posterior a los decretos.</b> Los hitos de <b>16-oct-2026 (CGPJ 2T) y 14-dic-2026 (CGPJ 3T)</b> describen periodos <b>anteriores</b> a los RDL; la primera lectura posterior (4T-2026) llegará en <b>~feb-2027</b>. Cada dato nuevo se compara con esta referencia.</p>{_descarga("punto-control")}</div>
+<p class="mut" style="font-size:.8rem">⚠️ <b>Los RDL fueron derogados por el Congreso el 2-oct-2026</b>, por lo que <b>no cabe atribuir a sus medidas</b> ningún cambio posterior en las series; este bloque se conserva como registro metodológico. Los datos publicados describen periodos anteriores a los RDL; la primera lectura posterior (4T-2026) llegará en <b>~feb-2027</b>.</p>{_descarga("punto-control")}</div>
 
 <h2 id="comparador">{E(region)} frente a España</h2>
 <div class="panel"><table><thead><tr><th>Indicador</th><th>Periodo</th><th class="num">España</th><th class="num">{E(region)}</th></tr></thead><tbody>{comp_rows}</tbody></table></div>
@@ -1000,7 +1005,7 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 <div class="panel">{cal}</div>
 
 <h2 id="medidas">Normas registradas (BOE)</h2>
-<div class="panel"><p class="mut" style="margin:0 0 12px;font-size:.85rem">Estado y fechas de cada norma registrada, con <b>aprobación</b>, <b>publicación</b> y <b>vigencia</b> por separado. El estado se actualiza solo con fuente oficial; mientras no exista Resolución del Congreso, figura como pendiente.</p><p class="mut" style="margin:0 0 4px;font-size:.85rem"><b>Hitos</b> (fecha de aprobación):</p>{filas_med}<div class="grid" style="margin-top:12px">{ficha_html}</div>{marco_html}<p class="mut" style="margin:18px 0 8px;font-size:.85rem"><b>Otras disposiciones</b> del BOE (sección I) sobre vivienda, de los últimos 21 días.</p><div class="grid">{boe_html}</div>{_descarga("boe-vivienda")}</div>
+<div class="panel"><p class="mut" style="margin:0 0 12px;font-size:.85rem">Estado y fechas de cada norma registrada, con <b>aprobación</b>, <b>publicación</b> y <b>vigencia</b> por separado. El estado se actualiza solo con fuente oficial: la <b>Resolución del Congreso</b> —cuando se publica— sustituye a «pendiente» por el acuerdo real (convalidación o derogación).</p><p class="mut" style="margin:0 0 4px;font-size:.85rem"><b>Hitos</b> (fecha de aprobación):</p>{filas_med}<div class="grid" style="margin-top:12px">{ficha_html}</div>{marco_html}<p class="mut" style="margin:18px 0 8px;font-size:.85rem"><b>Otras disposiciones</b> del BOE (sección I) sobre vivienda, de los últimos 21 días.</p><div class="grid">{boe_html}</div>{_descarga("boe-vivienda")}</div>
 
 <h2 id="metodo">Método y límites</h2>
 <div class="panel"><ul>
