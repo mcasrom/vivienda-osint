@@ -58,6 +58,7 @@ verificar.
 | `lanzamientos-ccaa` · `-cronologia` | Lanzamientos (desahucios) | CGPJ | trimestral |
 | `viviendas-turisticas-ccaa` | Viviendas de uso turístico | INE · tabla 46141 | anual |
 | `boe-vivienda` | Disposiciones del BOE sobre vivienda (sección I) | BOE | diario |
+| `ipc-vivienda` | IPC residencial: variación anual por componente (grupo 04) | INE · IPC base 2025 (ECOICOP v2) | mensual |
 | `punto-control` | Referencia (último dato publicado) vs último dato del panel | INE/CGPJ | diario |
 | `estado-fuentes` | Estado de actualización de cada fuente (ok, fecha, antigüedad) | cron | diaria |
 
@@ -74,6 +75,11 @@ Todo se descarga desde [/datos.html](https://vivienda.pruebapublica.com/datos.ht
 (INE, CGPJ, BOE). Si una ingesta falla, muestra su **última versión válida** y su antigüedad:
 la web nunca presenta datos viejos como recién publicados. El estado vive en
 `data/frescura.json` (generado por el cron, fuera de git) y se publica como `estado-fuentes`.
+
+**IPC residencial:** la portada incluye la sección **«Inflación residencial»** con la variación
+anual del **grupo 04** (Vivienda, agua, electricidad, gas y otros combustibles; **12,26 %** de la
+cesta del IPC de 2026) y la **contribución** de cada componente (variación anual × su peso) a la
+subida del grupo. Un **índice no es un precio**, y el grupo 04 **no** es el coste total del hogar.
 
 ## Cómo está construido
 

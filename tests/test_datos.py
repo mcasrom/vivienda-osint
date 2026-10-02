@@ -268,6 +268,32 @@ else:
         check(os.path.exists(os.path.join(WEB, "data", "estado-fuentes.csv")),
               "web/data/estado-fuentes.csv no se generó (frescura con estado)")
 
+# ---------------------------------------------------------------------------
+# 13. IPC residencial: serie publicada coherente + sección en la portada
+# ---------------------------------------------------------------------------
+p_ipc = os.path.join(WEB, "data", "ipc-vivienda.csv")
+if not os.path.exists(p_ipc):
+    OMITIDO.append("web/data/ipc-vivienda.csv (generado; requiere ingest.ipc)")
+else:
+    with open(p_ipc, encoding="utf-8") as fh:
+        rd_ipc = csv.DictReader(fh)
+        campos_ipc = rd_ipc.fieldnames or []
+        filas_ipc = list(rd_ipc)
+    for col in ("periodo", "vivienda", "alquiler", "electricidad", "gas"):
+        check(col in campos_ipc, f"ipc-vivienda.csv: falta la columna '{col}'")
+    check(len(filas_ipc) >= 6, f"ipc-vivienda.csv: solo {len(filas_ipc)} filas (¿ingesta IPC?)")
+    _ult = next((r for r in reversed(filas_ipc) if r.get("vivienda")), None)
+    check(_ult is not None, "ipc-vivienda.csv: sin dato de 'vivienda'")
+    if _ult:
+        try:
+            float(_ult["vivienda"])
+        except ValueError:
+            FALLOS.append(f"ipc-vivienda.csv: 'vivienda' no numérico: {_ult['vivienda']!r}")
+    if os.path.exists(html_p):
+        check('id="inflacion"' in page,
+              "la portada no incluye la sección «Inflación residencial» (id=inflacion)")
+        check("grupo 04" in page, "la sección de inflación no menciona el grupo 04")
+
 if FALLOS:
     print(f"FALLOS ({len(FALLOS)}):", file=sys.stderr)
     for f in FALLOS:

@@ -9,7 +9,7 @@ from datetime import date
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from ingest import boe as boeing, via, ine, cgpj, territorios, frescura  # noqa: E402
+from ingest import boe as boeing, via, ine, cgpj, territorios, frescura, ipc  # noqa: E402
 
 # Directorio de salida: por defecto web/ (público); el cron/publicar por staging
 # usa web_tmp/ y solo intercambia si el contrato de datos pasa (regla: publicar
@@ -390,7 +390,7 @@ def _estado_datos(est):
     si una fuente no se actualiza, muestra su última versión válida y su antigüedad.
     """
     filas = []
-    for k in ("ine", "cgpj", "boe"):
+    for k in est:
         e = est.get(k, {}) or {}
         nom = e.get("nombre", k.upper())
         if e.get("ok") is True:
@@ -461,7 +461,57 @@ def svg_bars(pares, color=None, h=200, w=780, fmt=None, unidad="/m²"):
 
 
 def _eurp(v):
-    return f"{v:,.1f} €".replace(",", " ").replace(".", ",") if v is not None else "—"
+    return f"{v:,.1f} €".replace(",", " ").replace(".", ",") if v is not None else "—"
+
+
+_MESES3 = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
+
+
+def _etq_mes(f):
+    try:
+        d = date.fromisoformat(str(f)[:10])
+        return f"{_MESES3[d.month - 1]} {str(d.year)[2:]}"
+    except (TypeError, ValueError):
+        return str(f)
+
+
+def svg_multiline(series, w=780, h=250, fmt=None):
+    """Varias líneas sobre el mismo eje Y. `series` = [(label, color, [(fecha, valor)])].
+    Alineadas por fecha (intersección); leyenda al final de cada línea. Sin librerías."""
+    fmt = fmt or (lambda v: f"{v:.1f}".replace(".", ","))
+    sets = [set(f for f, _ in s) for _, _, s in series if s]
+    if not sets:
+        return "<p class='mut'>sin datos</p>"
+    comun = sorted(set.intersection(*sets))
+    if len(comun) < 2:
+        return "<p class='mut'>serie no conectada</p>"
+    mapas = [dict(s) for _, _, s in series]
+    allv = [mapas[i][f] for i in range(len(series)) for f in comun]
+    mn, mx = min(min(allv), 0), max(allv)
+    rng = (mx - mn) or 1
+    n = len(comun)
+
+    def xy(i, v):
+        return 40 + i * (w - 80) / (n - 1), h - 40 - (v - mn) / rng * (h - 90)
+
+    zero = h - 40 - (0 - mn) / rng * (h - 90)
+    out = [f'<svg viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg" style="width:100%">']
+    out.append(f'<line x1="40" y1="{zero:.0f}" x2="{w-40}" y2="{zero:.0f}" stroke="#cbd5e1"/>')
+    for idx, (label, color, _s) in enumerate(series):
+        pts = [xy(i, mapas[idx][f]) for i, f in enumerate(comun)]
+        poly = " ".join(f"{x:.0f},{y:.0f}" for x, y in pts)
+        out.append(f'<polyline points="{poly}" fill="none" stroke="{color}" stroke-width="2.4"/>')
+        xl, yl = pts[-1]
+        out.append(f'<circle cx="{xl:.0f}" cy="{yl:.0f}" r="2.6" fill="{color}"/>')
+        out.append(f'<text x="{xl+6:.0f}" y="{yl+3:.0f}" font-size="10" fill="{color}" font-weight="700">{E(label)}</text>')
+    step = max(1, n // 8)
+    for i, f in enumerate(comun):
+        if i % step == 0 or i == n - 1:
+            x, _ = xy(i, mn)
+            out.append(f'<text x="{x:.0f}" y="{h-14}" font-size="9.5" fill="#64748b" '
+                       f'text-anchor="middle">{E(_etq_mes(f))}</text>')
+    out.append("</svg>")
+    return "".join(out)
 
 
 def build():
@@ -540,6 +590,19 @@ def build():
              "INE · ejecuciones hipotecarias", per_eh, edad=ed_ine),
     ])
     estado_datos = _estado_datos(est)
+
+    # --- IPC residencial (F1) ------------------------------------------------
+    _cols_ipc = {"general": "#334155", "vivienda": "#0f766e",
+                 "alquiler": "#b45309", "electricidad": "#0369a1"}
+    ipc_series = [(ipc.COMPONENTES[c][0], _cols_ipc[c], ipc.serie(c, "var_anual"))
+                  for c in ("general", "vivienda", "alquiler", "electricidad")
+                  if ipc.serie(c, "var_anual")]
+    ipc_multiline = svg_multiline(ipc_series)
+    ipc_contrib = ipc.contribucion()
+    ipc_bars = svg_bars(ipc_contrib, color="#0f766e",
+                        fmt=lambda v: f"{v:.2f}".replace(".", ",") + " pp",
+                        unidad="", h=max(150, len(ipc_contrib) * 30))
+    ipc_viv_ult, ipc_viv_per = ipc.ultimo("vivienda", "var_anual")
 
     eh_bars = "".join(
         f'<tr><td>{E(k)}</td><td class="num">{int(v):,}</td>'.replace(",", ".") + "</tr>"
@@ -682,7 +745,7 @@ def build():
                    ["indicador", "referencia", "periodo_referencia", "ultimo", "periodo_ultimo", "fuente"],
                    ctrl_rows, datasets)
     # Estado de frescura por fuente (F2): dato operativo, se publica por transparencia.
-    if any((est.get(k) or {}).get("ok") is not None for k in ("ine", "cgpj", "boe")):
+    if any((est.get(k) or {}).get("ok") is not None for k in est):
         _write_dataset("estado-fuentes", "Estado de actualización de las fuentes",
                        "cron del observatorio", "diaria", "CC BY 4.0",
                        ["fuente", "ok", "actualizado", "edad_dias", "ultima_ok"],
@@ -691,7 +754,18 @@ def build():
                          "actualizado": (est.get(k) or {}).get("actualizado") or "",
                          "edad_dias": (est.get(k) or {}).get("edad_dias"),
                          "ultima_ok": (est.get(k) or {}).get("ultima_ok") or ""}
-                        for k in ("ine", "cgpj", "boe")], datasets)
+                        for k in est], datasets)
+    # IPC residencial (F1): variación anual por componente (columnas alineadas por mes).
+    if ipc_series:
+        _comp_cols = list(ipc.COMPONENTES)
+        _ipc_map = {c: dict(ipc.serie(c, "var_anual")) for c in _comp_cols}
+        _ipc_fechas = sorted({f for c in _comp_cols for f, _ in ipc.serie(c, "var_anual")})
+        _write_dataset("ipc-vivienda", "IPC residencial — variación anual por componente",
+                       "INE · IPC base 2025 (ECOICOP v2)", "mensual",
+                       "INE — reutilización citando fuente",
+                       ["periodo"] + _comp_cols,
+                       [{"periodo": f, **{c: _ipc_map[c].get(f, "") for c in _comp_cols}}
+                        for f in _ipc_fechas], datasets)
     with open(os.path.join(DATA_DIR, "index.json"), "w", encoding="utf-8") as f:
         json.dump({"observatorio": "Observatorio de la vivienda",
                    "url": "https://vivienda.pruebapublica.com/", "generado": hoy, "series": datasets},
@@ -821,7 +895,7 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 @media(max-width:820px){{.inds{{grid-template-columns:repeat(2,1fr)}} .grid{{grid-template-columns:1fr}}}}
 </style></head><body>
 <nav class="nav"><div class="in"><b>🏠 Observatorio de la vivienda</b>
-<a href="#indicadores">Indicadores</a><a href="#comparador">Comparador</a><a href="#calendario">Calendario</a><a href="#medidas">Medidas</a><a href="#metodo">Método</a><a href="#apoyar">Apoyar</a><a href="/fuentes.html">Fuentes</a><a href="/propiedad.html">Propiedad</a><a href="/datos.html">Datos</a>
+<a href="#indicadores">Indicadores</a><a href="#inflacion">Inflación</a><a href="#comparador">Comparador</a><a href="#calendario">Calendario</a><a href="#medidas">Medidas</a><a href="#metodo">Método</a><a href="#apoyar">Apoyar</a><a href="/fuentes.html">Fuentes</a><a href="/propiedad.html">Propiedad</a><a href="/datos.html">Datos</a>
 <a href="https://pruebapublica.com" style="opacity:.7">pruebapublica.com</a></div></nav>
 <header class="hero"><div class="wrap">
 <h1>Qué dicen los datos oficiales de vivienda, sin puntuaciones ni atribuciones</h1>
@@ -856,6 +930,14 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 <div class="panel">
 {bloque_barras(vut, color="#7c3aed", fmt=lambda v: f"{int(v):,}".replace(",", "."), unidad="", grupo="comunidades autónomas")}
 <p class="mut" style="font-size:.8rem">Viviendas de uso turístico (VUT) por <b>comunidad autónoma</b>, {E(str(vut_anyo))}. Total nacional: <b>{vut_tot_txt}</b>{" · " + f"{vut_pct:.2f}".replace(".", ",") + f" % ({E(str(vut_anyo))})" if vut_pct else ""} del total de viviendas censadas. Fuente: <a href="https://www.ine.es/">INE</a> (Estadística de Viviendas Turísticas).</p>{_descarga("viviendas-turisticas-ccaa")}</div>
+
+<h2 id="inflacion">Inflación residencial <span>· IPC (INE, base 2025)</span></h2>
+<div class="panel">
+<p style="font-size:.85rem;margin:0 0 10px"><b>Vivienda, agua, electricidad, gas y otros combustibles</b> (grupo 04): <b>12,26 %</b> de la cesta del IPC de 2026{f" · último dato {E(_etq_mes(ipc_viv_per))}, <b>{_pct(ipc_viv_ult)}</b>" if ipc_viv_ult is not None else ""}. Variación anual de cada componente:</p>
+{ipc_multiline}
+<p style="font-size:.85rem;margin:20px 0 2px"><b>¿Qué encarece el coste residencial?</b> Contribución de cada componente a la variación del grupo 04 (<b>variación anual × su peso</b>), en puntos porcentuales.</p>
+{ipc_bars}
+<p class="mut" style="font-size:.8rem">Fuente: <a href="https://www.ine.es/">INE</a>, IPC base 2025 (ECOICOP v2). Un <b>índice no es un precio</b>, y el grupo 04 <b>no</b> es el coste total del hogar (no incluye alimentación, transporte…). Solo variación anual: la base cambió en ene-2026 y <b>no</b> se cruza con la anterior.</p>{_descarga("ipc-vivienda")}</div>
 
 <h2 id="control">Punto de control · decretos de sep–oct 2026</h2>
 <div class="panel">
