@@ -202,6 +202,7 @@ def main() -> int:
 
     novedades: list[tuple[str, str, dict]] = []   # (corta, clave, res)
     aplicadas: list[dict] = []
+    hay_resolucion = False
     for n in pendientes:
         rdl = n["corta"].split()[-1]          # «RDL 26/2026» -> «26/2026»
         vot = n.get("votacion") or {}
@@ -210,6 +211,7 @@ def main() -> int:
         if not res:
             _log(f"[watchdog] {n['id']} ({rdl}): sin resolución del Congreso desde {desde.isoformat()}")
             continue
+        hay_resolucion = True
         clave = f"{rdl}:{res['id']}"
         _log(f"[watchdog] {n['id']} ({rdl}): {res['estado']} · {res['id']} · {res['fecha']}"
              + (" (ya avisado)" if clave in notificadas else " (NUEVO)"))
@@ -218,16 +220,22 @@ def main() -> int:
         if args.aplicar:
             n["estado"] = res["estado"]
             n["estado_fecha"] = res["fecha"]
-            n["estado_nota"] = f"Acuerdo del Congreso: {res['id']}."
-            n["resultado"] = f"Congreso: acuerdo de {res['estado']} ({res['id']})."
+            n["estado_nota"] = f"Acuerdo del Congreso publicado en el BOE ({res['id']})."
+            n["resultado"] = (("Convalidado" if res["estado"] == "convalidada" else "Derogado")
+                              + f" por el Congreso de los Diputados ({res['fecha']}).")
             n["resultado_fecha"] = res["fecha"]
             n["resultado_url"] = res["url"]
+            n["resultado_boe"] = res["id"]
             n["resultado_numero"] = res.get("numero", "")
             n["resultado_anio"] = res.get("anio", "")
             aplicadas.append(n)
 
     if not novedades and not aplicadas:
-        _log("[watchdog] sin novedades: la web sigue diciendo «pendiente» y es lo correcto")
+        if hay_resolucion:
+            _log("[watchdog] resolución ya avisada; la web sigue «pendiente» hasta --aplicar "
+                 "(acción del dueño)")
+        else:
+            _log("[watchdog] sin novedades: sin resolución del Congreso todavía")
         return 0
 
     escrito_normas = False
