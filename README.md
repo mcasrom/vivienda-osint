@@ -54,7 +54,9 @@ verificar.
 |---|---|---|---|
 | `precios-ipv` | Precio de compraventa (IPV), variación anual | INE · tabla 80270 | trimestral |
 | `alquiler-ipva` | Índice de precios del alquiler | INE · tabla 59056 | anual |
+| `alquiler-serpavi` | Alquiler de referencia por municipio (contratos/fianzas) | MIVAU · SERPAVI (VDP001) | 2024 |
 | `ejecuciones-hipotecarias-ccaa` · `-nacional` | Ejecuciones hipotecarias iniciadas | INE · tabla 10740 | anual |
+| `compraventas-ccaa` · `-nacional` | Compraventas de vivienda inscritas | INE · ETDP (tabla 49280) | anual |
 | `lanzamientos-ccaa` · `-cronologia` | Lanzamientos (desahucios) | CGPJ | trimestral |
 | `viviendas-turisticas-ccaa` | Viviendas de uso turístico | INE · tabla 46141 | anual |
 | `boe-vivienda` | Disposiciones del BOE sobre vivienda (sección I) | BOE | diario |
@@ -125,8 +127,9 @@ Tres capas de test, todos ejecutados en CI (`.github/workflows/tests.yml`):
 
 - `tests/test_datos.py` — contratos de datos **sin dependencias**: vocabulario de
   estados, consistencia de fechas (aprobación < BOE ≤ vigencia), nombres de CCAA
-  canónicos sin duplicados, y **contrato CSV ↔ HTML**: lo que se descarga es lo que se
-  ve en la página (verificado que muerde: manipular una etiqueta → 3 fallos).
+  canónicos sin duplicados, **contrato CSV ↔ HTML** (lo que se descarga es lo que se
+  ve; muerde: manipular una etiqueta → 3 fallos) y **contrato de ingesta** (suma de CCAA
+  = nacional para ejecuciones, lanzamientos, VUT y compraventas; §15/§16).
 - `tests/test_territorios.py` — canonización y huecos declarados del CGPJ
   (p. ej. Ceuta/Melilla no publican lanzamientos).
 - `tests/test_watchdog_rdl.py` — precedentes de convalidación/derogación y controles
