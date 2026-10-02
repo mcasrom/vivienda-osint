@@ -1,66 +1,150 @@
-# Microservicio **Vivienda** (pruebapublica.com)
+<div align="center">
 
-> Información **cívica y neutral** sobre la vivienda en España: qué cambian los decretos (BOE),
-> cuánto cuesta el alquiler por municipio, cómo participar. **Solo hechos con fuente enlazada.**
-> **No** es FIMI: **no** analiza coordinación, amplificación ni «quién lo mueve».
+# Observatorio de la vivienda · vivienda-osint
 
-**Marca y dominio propios.** Comparte *datos* con `municipal-intel` (precios), **no ejecución**.
-Arquitectura **estática** (build → HTML, nginx) → **RAM ≈ 0**.
+**Datos oficiales de vivienda en España, con método, contrato y auditoría.**
 
-## Estructura
+[![Licencia](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
+[![Release](https://img.shields.io/badge/dynamic/json?url=https://api.github.com/repos/mcasrom/vivienda-osint/releases/latest&label=release&query=$.tag_name)](https://github.com/mcasrom/vivienda-osint/releases)
+[![Tests](https://img.shields.io/github/actions/workflow/status/mcasrom/vivienda-osint/tests.yml?label=CI%20tests)](https://github.com/mcasrom/vivienda-osint/actions)
+
+[Panel en vivo](https://vivienda.pruebapublica.com/) ·
+[Catálogo de datos](https://vivienda.pruebapublica.com/datos.html) ·
+[Fuentes y auditoría](https://vivienda.pruebapublica.com/fuentes.html) ·
+[/llms.txt](https://vivienda.pruebapublica.com/llms.txt)
+
+</div>
+
+---
+
+## Qué es
+
+Un **observatorio cívico e independiente** que publica datos oficiales de vivienda en
+España: **precios de compraventa (IPV), alquiler (IPVA), lanzamientos judiciales,
+ejecuciones hipotecarias, viviendas de uso turístico y las disposiciones del BOE** con
+impacto en vivienda, junto con el **estado real de cada real-decreto ley** (publicada,
+en votación, convalidada o derogada).
+
+Reglas editoriales duras:
+
+- **Solo hechos con fuente enlazada** (INE, CGPJ, BOE). Nada de datos inventados ni
+  estimaciones sin origen.
+- **Sin puntuaciones compuestas ni atribuciones.** Cada cifra lleva unidad, fuente y
+  período. El sitio **no** analiza coordinación, amplificación ni autoría.
+- **El denominador va en la tabla**: si una serie tiene pocas observaciones, se dice,
+  no se maquilla.
+
+> ⚠️ **Lección aprendida**: un dato "derivado" que no se sostiene se retira, no se
+> maquilla. El precio del alquiler en €/m² se descartó en octubre-2026 al medir que la
+> muestra no lo hacía defendible (fuentes mezcladas y scraper topado). Solo vuelve con
+> n suficiente, fuente declarada y cada columna con su origen verificado. El alquiler se
+> publica como **IPVA (índice anual del INE)**, no como precio por m².
+
+## Por qué existe
+
+Los datos de vivienda existen, pero están **dispersos en portales oficiales con formatos
+incompatibles** entre CCAA, tablas y ministerios. Este microservicio los **consolida**,
+los **normaliza** (nombres de CCAA canónicos con código INE) y los **publica como datos
+abiertos** (CSV+JSON) que cualquier persona, periodista o herramienta puede descargar y
+verificar.
+
+## Qué publica (datos abiertos, CSV + JSON)
+
+| Serie | Qué mide | Fuente | Periocidad |
+|---|---|---|---|
+| `precios-ipv` | Precio de compraventa (IPV), variación anual | INE · tabla 80270 | trimestral |
+| `alquiler-ipva` | Índice de precios del alquiler | INE · tabla 59056 | anual |
+| `ejecuciones-hipotecarias-ccaa` · `-nacional` | Ejecuciones hipotecarias iniciadas | INE · tabla 10740 | anual |
+| `lanzamientos-ccaa` · `-cronologia` | Lanzamientos (desahucios) | CGPJ | trimestral |
+| `viviendas-turisticas-ccaa` | Viviendas de uso turístico | INE · tabla 46141 | anual |
+| `boe-vivienda` | Disposiciones del BOE sobre vivienda (sección I) | BOE | diario |
+| `punto-control` | Referencia (último dato publicado) vs último dato del panel | INE/CGPJ | diario |
+
+Todo se descarga desde [/datos.html](https://vivienda.pruebapublica.com/datos.html):
+
+- `web/data/<serie>.csv` y `.json`, **UTF-8 con coma y punto decimal** (machine-readable).
+- `web/data/latest.json` — el último dato de cada indicador, para consumidores ligeros.
+- `web/data/index.json` — catálogo con fuente, período, licencia y **n** por serie.
+- `web/llms.txt` — guía para asistentes de IA.
+- JSON-LD `Dataset` con 9 `distribution`/`DataDownload` en la portada.
+
+## Cómo está construido
+
+**Arquitectura estática: RAM ≈ 0.** No hay API propia ni backend: un build diario ingiere
+datos oficiales, genera HTML/CSV/JSON y se sirve por nginx + Cloudflare.
+
 ```
-ingest/       boe.py (decretos, BOE datos abiertos) · via.py (precios, via.db) · ine.py (WIP)
-gen/          gen_vivienda.py  → web/index.html
-data/         vivienda.db (SQLite)
-scripts/      cron_vivienda.sh (ingesta diaria + regenera)
+ingest/         boe.py · cgpj.py · ine.py · via.py · territorios.py
+gen/            gen_vivienda.py → web/index.html   ·   gen_og.py → tarjeta social
+tests/          test_datos.py · test_territorios.py · test_watchdog_rdl.py
+scripts/        cron_vivienda.sh (ingesta + regen diarias) · watchdog_rdl.py
+data/           vivienda.db (SQLite) · normas.json (única fuente del estado legal)
+web/             salida (ignorada en git, regenerada por el build)
 ```
 
-## Uso
+### Fuentes de datos
+- **INE** — webservice `wstempus` (datos abiertos): tablas 80270 (IPV), 59056 (IPVA),
+  10740 (ejecuciones), 46141 (viviendas turísticas).
+- **CGPJ** — lanzamientos por CCAA y cronología nacional.
+- **BOE** — sumario diario (sección I), de donde también se leen los títulos oficiales
+  completos de cada norma (no se duplican en el repo).
+
+## Estado legal de los decretos (el preciso y difícil de lo que nos piden)
+
+El estado de cada norma registrada vive en **una única fuente oficial**: `data/normas.json`.
+Vasculación por ley: el **art. 86.2 CE** obliga al Congreso a pronunciarse sobre cada
+real decreto-ley, y su acuerdo se publica como **Resolución del Congreso en el BOE
+(sección I)** — con precedentes reales `BOE-A-2023-8221` (convalidación) y
+`BOE-A-2026-4667` (derogación).
+
+Reglas:
+- La página **no anticipa** el resultado: mientras se vota, muestra «pendiente» con la
+  fecha y hora de la votación.
+- Actualizar el estado solo con prueba oficial (la Resolución publicada), con un
+  **watchdog automático** (`scripts/watchdog_rdl.py`) que consulta el BOE varias veces al
+  día, avisa por Telegram y solo cambia el registro con la versión `--aplicar`.
+
+## Calidad: contratos y CI
+
+Tres capas de test, todos ejecutados en CI (`.github/workflows/tests.yml`):
+
+- `tests/test_datos.py` — contratos de datos **sin dependencias**: vocabulario de
+  estados, consistencia de fechas (aprobación < BOE ≤ vigencia), nombres de CCAA
+  canónicos sin duplicados, y **contrato CSV ↔ HTML**: lo que se descarga es lo que se
+  ve en la página (verificado que muerde: manipular una etiqueta → 3 fallos).
+- `tests/test_territorios.py` — canonización y huecos declarados del CGPJ
+  (p. ej. Ceuta/Melilla no publican lanzamientos).
+- `tests/test_watchdog_rdl.py` — precedentes de convalidación/derogación y controles
+  negativos del watchdog.
+
+Ejecución local:
 ```bash
 python3 -m venv venv && ./venv/bin/pip install -r requirements.txt
-./venv/bin/python -m ingest.boe        # ingesta BOE (últimos 21 días)
-./venv/bin/python gen/gen_vivienda.py  # genera web/index.html
+./venv/bin/python -m ingest.boe   # sumario diario del BOE
+./venv/bin/python -m ingest.ine   # IPV / IPVA / ejecuciones / turísticas
+./venv/bin/python -m ingest.cgpj  # lanzamientos
+./venv/bin/python gen/gen_vivienda.py && /usr/bin/python3 gen/gen_og.py
+./venv/bin/python tests/test_datos.py
 ```
 
-## Estado de las normas registradas (BOE)
-`data/normas.json` es la **única fuente** del estado de cada norma registrada: aprobación,
-publicación, vigencia y estado, con las fechas **separadas** (no se confunde la aprobación
-con la publicación). Los títulos oficiales completos **no** se duplican ahí: se leen de la
-tabla `boe` (`ingest/boe.py`).
+## ¿Cómo se actualiza?
 
-Vocabulario de `estado`: `publicada` · `en_votacion` · `convalidada` · `derogada`.
-
-**Para actualizar el estado tras una votación** (p. ej. la convalidación o derogación de un
-real decreto-ley):
-1. Consultar la **Resolución del Congreso** en el BOE, sección I (es donde se publica; art.
-   86.2 CE obliga al Congreso a pronunciarse expresamente sobre la convalidación o derogación).
-2. Editar `data/normas.json`: `estado`, `resultado` (texto neutral) y `resultado_fecha`.
-3. `./venv/bin/python gen/gen_vivienda.py` y `./venv/bin/python tests/test_datos.py`.
-4. Purgar Cloudflare (zona `pruebapublica`) para que se vea en producción.
-
-El test de contratos **falla si**: una norma registrada no está en la tabla `boe`, si su fecha
-BOE no coincide con la BD, si el estado está fuera de vocabulario, si se declara un resultado
-sin `resultado` + `resultado_fecha`, si una norma pendiente tiene resultado, si la cronología
-(aprobación < BOE < vigencia) se rompe, o si el CSV publicado deja alguna fila sin `estado`.
-
-En `en_votacion` la página **no anticipa el resultado**: muestra la fecha y hora de la votación
-y lo declara pendiente.
-
-## Tests (contratos de datos)
-```bash
-./venv/bin/python tests/test_datos.py   # sin dependencias; sale con 1 si algo falla
+```cron
+15 6 * * *  /home/deploy/vivienda-osint/scripts/cron_vivienda.sh
 ```
 
-## Cron (diario, hora distinta a FIMI)
-```
-15 6 * * * /home/deploy/vivienda-osint/scripts/cron_vivienda.sh >> /home/deploy/vivienda-osint/logs/cron.log 2>&1
-```
+El cron ingiere + regenera y **corre los tests después de cada build**: si la regen
+sale mal, se oye (el fallo va a `logs/` y no solo se ignora).
 
-## Alcance / encuadre
-- **MVP:** decretos (BOE) · precios por municipio · cómo participar · fuentes.
-- **Fase 2:** API JSON · panel admin.
-- **Retirado del alcance (2-oct-2026):** cronología de la protesta y cobertura de prensa (el observatorio es un registro descriptivo de datos y normas, sin activismo).
-- **Fuera de alcance:** coordinación/amplificación · atribución · datos personales.
+## Reproducibilidad y honestidad
+
+- Las salidas generadas (`web/`) están **ignoradas en git** a propósito: el repo es la
+  **receta**, y la web se regenera desde datos oficiales + código versionado.
+- Cada serie del catálogo declara su **fuente, período y n** — y en el panel, el período
+  real de cada punto de control.
+- No hay métricas "bonitas": si un agregado no aguanta la auditoría, se retira.
 
 ## Licencia
-AGPL-3.0 — ver `LICENSE`.
+
+**AGPL-3.0** — ver [LICENSE](LICENSE). Uso libre citando fuente; las series del INE/CGPJ/
+BOE tienen sus propias condiciones de reutilización (declaradas en el catálogo).
