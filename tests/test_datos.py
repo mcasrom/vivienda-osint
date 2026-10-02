@@ -20,8 +20,14 @@ import sqlite3
 import sys
 from datetime import date
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from ingest import territorios  # noqa: E402
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FALLOS: list[str] = []
+
+# Tabla canónica: todo nombre de CCAA publicado debe salir de aquí.
+CCAA_CSV = ("ejecuciones-hipotecarias-ccaa", "viviendas-turisticas-ccaa", "lanzamientos-ccaa")
 
 
 def check(cond: bool, msg: str) -> None:
@@ -87,6 +93,54 @@ if os.path.exists(csv_p):
         if fila:
             check(fila.get("estado") == n.get("estado"),
                   f"{n['id']}: estado del CSV ({fila.get('estado')}) != registro ({n.get('estado')})")
+
+# ---------------------------------------------------------------------------
+# 8. Nombres de CCAA canónicos, sin duplicados, con los huecos declarados
+# ---------------------------------------------------------------------------
+for did in CCAA_CSV:
+    p_csv = os.path.join(ROOT, "web", "data", did + ".csv")
+    if not os.path.exists(p_csv):
+        FALLOS.append(f"falta web/data/{did}.csv")
+        continue
+    with open(p_csv, encoding="utf-8") as fh:
+        nombres = [r["ccaa"] for r in csv.DictReader(fh)]
+    for nb in nombres:
+        check(nb in territorios.NOMBRES, f"{did}: '{nb}' no está en la tabla canónica de CCAA")
+    check(len(nombres) == len(set(nombres)), f"{did}: CCAA duplicadas")
+    huecos = {h for h, _motivo in territorios.HUECOS.get(did, ())}
+    faltan = set(territorios.NOMBRES) - set(nombres)
+    check(faltan == huecos,
+          f"{did}: faltan {sorted(faltan)} y los huecos declarados son {sorted(huecos)}")
+
+# ---------------------------------------------------------------------------
+# 9. Contrato CSV <-> HTML: lo que se descarga es lo que se ve en la página
+# ---------------------------------------------------------------------------
+html_p = os.path.join(ROOT, "web", "index.html")
+check(os.path.exists(html_p), "falta web/index.html")
+if os.path.exists(html_p):
+    page = open(html_p, encoding="utf-8").read()
+    bloques = re.findall(
+        r"Ver el detalle completo · (\d+) comunidades autónomas</summary>"
+        r"<table[^>]*><tbody>(.*?)</tbody>", page, re.S)
+    check(len(bloques) == len(CCAA_CSV),
+          f"se esperaban {len(CCAA_CSV)} bloques de detalle CCAA en la página y hay {len(bloques)}")
+    # orden en la página: ejecuciones (EH), lanzamientos (LZ), viviendas turísticas (VUT)
+    orden_pagina = ("ejecuciones-hipotecarias-ccaa", "lanzamientos-ccaa", "viviendas-turisticas-ccaa")
+    for (anunciado, cuerpo), did in zip(bloques, orden_pagina):
+        filas = re.findall(r"<tr><td>([^<]+)</td><td class=\"num\">([^<]*)</td></tr>", cuerpo)
+        check(len(filas) == int(anunciado),
+              f"{did}: la página anuncia {anunciado} filas y pinta {len(filas)}")
+        with open(os.path.join(ROOT, "web", "data", did + ".csv"), encoding="utf-8") as fh:
+            csv_filas = [(r["ccaa"], r[list(r)[-1]]) for r in csv.DictReader(fh)]
+        for (nb_html, v_html), (nb_csv, v_csv) in zip(filas, csv_filas):
+            check(nb_html == nb_csv,
+                  f"{did}: la página muestra '{nb_html}' y el CSV tiene '{nb_csv}'")
+            v_num = v_html.replace(".", "").replace(" ", "").replace(",", ".")
+            try:
+                check(abs(float(v_num) - float(v_csv)) < 1e-6,
+                      f"{did}: valor distinto en '{nb_csv}' (página {v_html} vs CSV {v_csv})")
+            except ValueError:
+                FALLOS.append(f"{did}: valor no numérico en la página para '{nb_html}': {v_html!r}")
 
 if FALLOS:
     print(f"FALLOS ({len(FALLOS)}):", file=sys.stderr)

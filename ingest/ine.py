@@ -6,6 +6,8 @@ Guarda series en data/vivienda.db.
 from __future__ import annotations
 import os, json, sqlite3, urllib.request
 
+from ingest import territorios
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB = os.path.join(ROOT, "data", "vivienda.db")
 TABLAS = {"ipva": 59056, "ipv": 80270}
@@ -94,7 +96,7 @@ def eh_ccaa(anyo=None):
     rows = c.execute("SELECT etiqueta, valor FROM ine_serie WHERE serie LIKE 'eh:%' AND fecha=? "
                      "AND etiqueta<>'Total Nacional' ORDER BY valor DESC", (str(anyo),)).fetchall()
     total = c.execute("SELECT valor FROM ine_serie WHERE serie='eh:Total Nacional' AND fecha=?", (str(anyo),)).fetchone()
-    return rows, anyo, (total[0] if total else None)
+    return territorios.ordenar(rows), anyo, (total[0] if total else None)
 
 
 def ingest_vte() -> int:
@@ -126,13 +128,9 @@ def ingest_vte() -> int:
 
 # Nombres oficiales INE de las 19 comunidades/ciudades autónomas. La tabla 46141
 # mezcla CCAA y provincias con la misma forma de nombre, así que se filtra por lista.
-CCAA = {
-    "andalucía", "aragón", "asturias, principado de", "balears, illes", "canarias",
-    "cantabria", "castilla y león", "castilla - la mancha", "cataluña", "ceuta",
-    "comunitat valenciana", "extremadura", "galicia", "madrid, comunidad de",
-    "melilla", "murcia, región de", "navarra, comunidad foral de", "país vasco",
-    "rioja, la",
-}
+# Nombres oficiales del INE en minúscula (19 CCAA). La fuente es la tabla canónica
+# `ingest/territorios`: antes esta lista vivía aquí y el CGPJ usaba otro criterio.
+CCAA = set(territorios.NORMAL)
 
 
 def vte_ccaa():
@@ -143,7 +141,7 @@ def vte_ccaa():
     rows = [(e, v) for e, v in rows if e.strip().lower() in CCAA]
     tot = c.execute("SELECT valor FROM ine_serie WHERE serie='vte:Total Nacional' AND fecha=?", (anyo,)).fetchone()
     pct = c.execute("SELECT valor FROM ine_serie WHERE serie='vte_pct' AND fecha=?", (anyo,)).fetchone()
-    return rows, anyo, (tot[0] if tot else None), (pct[0] if pct else None)
+    return territorios.ordenar(rows), anyo, (tot[0] if tot else None), (pct[0] if pct else None)
 
 
 def eh_nacional():

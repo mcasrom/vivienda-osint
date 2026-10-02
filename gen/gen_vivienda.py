@@ -9,7 +9,7 @@ from datetime import date
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from ingest import boe as boeing, via, ine, cgpj  # noqa: E402
+from ingest import boe as boeing, via, ine, cgpj, territorios  # noqa: E402
 
 OUT = os.path.join(ROOT, "web", "index.html")
 DATA_DIR = os.path.join(ROOT, "web", "data")
@@ -420,7 +420,8 @@ def _eurp(v):
 def build():
     v = via.resumen()
     hoy = date.today().isoformat()
-    region = "Murcia"
+    region_cod = "14"                       # Murcia (código INE)
+    region = territorios.NOMBRE[region_cod]
 
     ipv = ine.serie("ipv_var_anual")
     ipv_ult = ine.ultimo("ipv_var_anual")
@@ -496,7 +497,7 @@ def build():
     reg_lz = None
     reg_lz_nom = ""
     for k, val in lz:
-        if k.upper().startswith(region.upper()):
+        if k == region:            # nombre canónico exacto (antes: startswith, que rompía al canonicizar)
             reg_lz, reg_lz_nom = val, k
             break
     comp_rows = "".join(

@@ -3,10 +3,17 @@
 Fuente: «Datos sobre el efecto de la crisis en los órganos judiciales» (Excel trimestral),
 https://www.poderjudicial.es/cgpj/es/Temas/Estadistica-Judicial/.../Efecto-de-la-Crisis-en-los-organos-judiciales/
 Hoja objetivo: 'Lanzamientos practic. total TSJ'. Guarda en data/vivienda.db (tabla lanzamientos).
+
+Las etiquetas del CGPJ se traducen al nombre canónico del INE (`ingest/territorios`):
+el XLSX viene en mayúsculas y abreviaturas («MADRID, COMUNIDAD») y el INE usa
+«Madrid, Comunidad de». Sin esa traducción la misma fila se llamaba de dos formas
+en dos páginas del observatorio.
 """
 from __future__ import annotations
-import os, re, sqlite3, urllib.request, tempfile
+import os, re, sqlite3, sys, urllib.request, tempfile
 import openpyxl
+
+from ingest import territorios
 
 PAGINA = ("https://www.poderjudicial.es/cgpj/es/Temas/Estadistica-Judicial/Estadistica-por-temas/"
           "Datos-penales--civiles-y-laborales/Civil-y-laboral/Efecto-de-la-Crisis-en-los-organos-judiciales/")
@@ -87,16 +94,36 @@ def ingest() -> tuple[int, str, str]:
         if amb.strip().upper() == "TOTAL":
             break
     c = _con()
-    n = 0
+    # --- etiquetas: CGPJ -> nombre canónico del INE; lo desconocido se avisa (no se descarta) ---
+    filas_ccaa, desconocidas = [], []
     for amb, r in bloque:
         if amb.upper() == "TOTAL":
+            continue
+        canon = territorios.canonico(amb)
+        if canon is None:
+            desconocidas.append(amb)
             continue
         val = r[cols[-1][0]]
         try:
             v = float(val)
         except (TypeError, ValueError):
             continue
-        n += c.execute("INSERT OR REPLACE INTO lanzamientos VALUES(?,?,?)", (amb, ult_periodo, v)).rowcount
+        filas_ccaa.append((canon, ult_periodo, v))
+    if desconocidas:
+        print(f"[cgpj] AVISO: {len(desconocidas)} etiquetas no reconocidas y NO publicadas: "
+              f"{desconocidas}", file=sys.stderr)
+    # borra las filas del periodo con etiquetas antiguas (mismo dato, otro nombre)
+    c.execute("DELETE FROM lanzamientos WHERE periodo=? AND ambito<>'TOTAL' AND ambito NOT IN (%s)"
+              % ",".join("?" * len(territorios.NOMBRES)), [ult_periodo, *territorios.NOMBRES])
+    stale = c.execute("SELECT DISTINCT periodo FROM lanzamientos WHERE ambito<>'TOTAL' "
+                      "AND ambito NOT IN (%s)" % ",".join("?" * len(territorios.NOMBRES)),
+                      tuple(territorios.NOMBRES)).fetchall()
+    if stale:
+        print(f"[cgpj] AVISO: quedan filas con etiquetas antiguas en periodos "
+              f"{sorted(p[0] for p in stale)} (histórico, no publicado)", file=sys.stderr)
+    n = 0
+    for canon, per, v in filas_ccaa:
+        n += c.execute("INSERT OR REPLACE INTO lanzamientos VALUES(?,?,?)", (canon, per, v)).rowcount
     # cronología nacional (fila TOTAL, todas las columnas)
     for amb, r in bloque:
         if amb.upper() == "TOTAL":
@@ -115,7 +142,10 @@ def por_ccaa(periodo=None):
         periodo = c.execute("SELECT MAX(periodo) FROM lanzamientos").fetchone()[0]
     rows = c.execute("SELECT ambito, valor FROM lanzamientos WHERE periodo=? AND ambito<>'TOTAL' ORDER BY valor DESC", (periodo,)).fetchall()
     total = c.execute("SELECT valor FROM lanzamientos WHERE periodo=? AND ambito='TOTAL'", (periodo,)).fetchone()
-    return rows, periodo, (total[0] if total else None)
+    # red de seguridad: si la BD aún tiene etiquetas antiguas (p. ej. sin reingesta),
+    # se normalizan al leer. La ingesta ya las escribe canónicas.
+    rows = [(territorios.canonico(a) or a, v) for a, v in rows]
+    return territorios.ordenar(rows), periodo, (total[0] if total else None)
 
 
 def cronologia():
