@@ -41,8 +41,8 @@ ESTADO_TXT = {
     "derogada": "Derogada por el Congreso",
 }
 DESENLACE_TXT = {
-    "convalidada": "el Decreto-ley queda convalidado y mantiene su vigencia",
-    "derogada": "el Decreto-ley queda derogado",
+    "convalidada": "si se convalida, el Decreto-ley queda convalidado y mantiene su vigencia",
+    "derogada": "si se deroga, el Decreto-ley queda derogado",
 }
 _MES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
 
@@ -375,12 +375,13 @@ def _ind(valor, unidad, tend, etq_tend, fuente, periodo, edad=None):
 
 
 def etiqueta_src(f, p, edad=None):
-    # `edad` = días desde la última incorporación correcta de la fuente (o None).
-    # Se añade DENTRO del mismo <span> para no romper el contrato del test (§10).
-    extra = ""
+    # `p` = periodo del DATO (p. ej. «2024»); `edad` = días desde nuestra última
+    # incorporación. Se separan en spans distintos para que no se lea «dato de hoy».
+    act = ""
     if edad is not None:
-        extra = " · incorporado hoy" if edad == 0 else f" · incorporado hace {edad} d"
-    return f'{f}<br><span class="mut">{p}{extra}</span>'
+        txt = "actualizado hoy" if edad == 0 else f"actualizado hace {edad} d"
+        act = f' · <span class="mut">{txt}</span>'
+    return f'{f}<br><span class="mut">{p}</span>{act}'
 
 
 def _estado_datos(est):
@@ -565,6 +566,28 @@ def build():
     eh_tot_txt = f"{int(eh_total):,}".replace(",", ".") if eh_total else "—"
     vut, vut_anyo, vut_total, vut_pct = ine.vte_ccaa()
     vut_tot_txt = f"{int(vut_total):,}".replace(",", ".") if vut_total else "—"
+    # tasas por 1.000 viviendas (denominador = total de viviendas censadas,
+    # derivado del % de viviendas turísticas que publica el INE por CCAA)
+    _vte_pct_ccaa = ine.vte_pct_ccaa()
+    _total_viv = {c: (v / (_vte_pct_ccaa[c] / 100.0)) for c, v in vut if _vte_pct_ccaa.get(c)}
+    _lz_d = {k: v for k, v in lz}
+    _eh_d = {k: v for k, v in eh}
+    _tasas = []
+    for _c in territorios.NOMBRES:
+        _tv = _total_viv.get(_c)
+        if not _tv:
+            continue
+        _l, _e = _lz_d.get(_c), _eh_d.get(_c)
+        _tasas.append((_c,
+                       round(_l * 4 / _tv * 1000, 1) if _l is not None else None,
+                       round(_e / _tv * 1000, 1) if _e is not None else None))
+    _tasas.sort(key=lambda r: (r[1] is None, -(r[1] or 0)))
+
+    def _r1(v):
+        return "—" if v is None else f"{v:.1f}".replace(".", ",")
+
+    tasas_rows = "".join(f'<tr><td>{E(_c)}</td><td class="num">{_r1(_l)}</td>'
+                         f'<td class="num">{_r1(_e)}</td></tr>' for _c, _l, _e in _tasas)
     ipva_s = ine.serie("ipva_var_anual")
     ipva_var = ipva_s[-1][1] if ipva_s else None
     tend_ia, _ = _tendencia(ipva_s)
@@ -603,6 +626,14 @@ def build():
         f'<td class="num">{_dlt(tp, _vp(b0.get(k))[0], _vp(ind_now.get(k))[0])}</td>'
         f'<td class="mut">{src}</td></tr>'
         for k, tp, tt, src in _IND)
+    _control_igual = all(_vp(b0.get(k))[0] == _vp(ind_now.get(k))[0] for k, tp, tt, src in _IND)
+    _tabla_control = ('<table><thead><tr><th>Indicador</th><th class="num">Referencia · valor · periodo</th>'
+                      '<th class="num">Último dato · valor · periodo</th><th class="num">Δ</th>'
+                      f'<th>Fuente</th></tr></thead><tbody>{filas_control}</tbody></table>')
+    if _control_igual:
+        _tabla_control = ('<details style="margin-top:6px"><summary style="cursor:pointer;font-weight:600;'
+                          'font-size:.82rem;color:var(--ink)">Ver la tabla del punto de control '
+                          '(aún sin cambios desde la referencia)</summary>' + _tabla_control + '</details>')
     ipva = ine.serie("ipva_indice")
 
     tend, _ = _tendencia(ipv)
@@ -655,25 +686,31 @@ def build():
         f'<tr><td>{E(k)}</td><td class="num">{int(v):,}</td>'.replace(",", ".") + "</tr>"
         for k, v in eh[:12])
 
-    # comparador España vs región
-    reg_lz = None
-    reg_lz_nom = ""
-    for k, val in lz:
-        if k == region:            # nombre canónico exacto (antes: startswith, que rompía al canonicizar)
-            reg_lz, reg_lz_nom = val, k
-            break
-    ipv_ccaa = ine.serie(f"ipv_var_anual:{region_cod}")
-    ipv_ccaa_ult = ine.ultimo(f"ipv_var_anual:{region_cod}")
-    per_ipv_ccaa = ipv_ccaa[-1][0] if ipv_ccaa else None
-    ipv_row = (f'<tr><td>Compraventa (IPV, var. anual)</td><td>{E(per_ipv)}</td>'
+    # comparador España vs región (SELECTOR de CCAA, client-side)
+    _lz_map = {k: v for k, v in lz}
+    comp_data = {}
+    for cod, nom in territorios.NOMBRE.items():
+        _ipv = ine.ultimo(f"ipv_var_anual:{cod}")
+        comp_data[cod] = {"nombre": nom,
+                          "ipv": round(_ipv, 1) if _ipv is not None else None,
+                          "lz": int(_lz_map[nom]) if nom in _lz_map else None}
+    region = territorios.NOMBRE[region_cod]
+    reg_lz = comp_data[region_cod]["lz"]
+    ipv_ccaa_ult = comp_data[region_cod]["ipv"]
+    ipv_row = (f'<tr id="cmp-ipv"><td>Compraventa (IPV, var. anual)</td><td>{E(per_ipv)}</td>'
                f'<td class="num">{_pct(ipv_ult)}</td>'
                + (f'<td class="num">{_pct(ipv_ccaa_ult)}</td></tr>'
                   if ipv_ccaa_ult is not None
                   else '<td class="num mut">sin dato CCAA</td></tr>'))
-    lz_row = (f'<tr><td>Lanzamientos judiciales</td><td>{E(per_lz)}</td>'
+    lz_row = (f'<tr id="cmp-lz"><td>Lanzamientos judiciales</td><td>{E(per_lz)}</td>'
               f'<td class="num">{_fmtv("int", lz_total)}</td>'
               f'<td class="num">{_fmtv("int", reg_lz) if reg_lz is not None else "sin dato"}</td></tr>')
     comp_rows = ipv_row + lz_row
+    _opts = "".join(f'<option value="{c}"{" selected" if c == region_cod else ""}>{E(n)}</option>'
+                    for c, n in territorios.NOMBRE.items())
+    comp_json = json.dumps(comp_data, ensure_ascii=False)
+    nat_json = json.dumps({"ipv_per": per_ipv, "ipv_txt": _pct(ipv_ult),
+                           "lz_per": per_lz, "lz_txt": _fmtv("int", lz_total)}, ensure_ascii=False)
 
     filas_med = "".join(
         f'<div class="m"><span class="d">{E(d)}</span> <b>{E(t)}</b> '
@@ -733,13 +770,13 @@ def build():
               f' target="_blank" rel="noopener">BOE ↗</a></div>')
     ficha_html = "".join(_fichas)
     desenlaces = " · ".join(
-        f'<span class="mut">Si se {E(k)}: {E(v)}.</span>' for k, v in DESENLACE_TXT.items())
+        f'<span class="mut">{E(v[0].upper() + v[1:])}.</span>' for v in DESENLACE_TXT.values())
     _ej = " · ".join(f'<a class="src" href="{E(x["url"])}" target="_blank" rel="noopener">'
                      f'{E(x["etiqueta"])}</a>' for x in MARCO.get("ejemplos", []))
     marco_html = (f'<p class="mut" style="font-size:.82rem;margin-top:12px">{E(MARCO["descripcion"])} '
                   f'<a class="src" href="{E(MARCO["url"])}" target="_blank" rel="noopener">art. 86.2 CE ↗</a>. '
                   f'{E(MARCO["registro"])} {_ej}</p><p class="mut" style="font-size:.82rem">'
-                  f'{E(desenlaces)} El observatorio no anticipa el resultado.</p>')
+                  f'{desenlaces} El observatorio no anticipa el resultado.</p>')
     _txt_ap = " y ".join(f"<b>{_fd(a)}</b>" for a in sorted(_ap))
     _txt_bo = " y ".join(f"<b>{_fd(b)}</b>" for b in sorted(_bo))
 
@@ -983,6 +1020,12 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 {bloque_barras(vut, color="#7c3aed", fmt=lambda v: f"{int(v):,}".replace(",", "."), unidad="", grupo="comunidades autónomas")}
 <p class="mut" style="font-size:.8rem">Viviendas de uso turístico (VUT) por <b>comunidad autónoma</b>, {E(str(vut_anyo))}. Total nacional: <b>{vut_tot_txt}</b>{" · " + f"{vut_pct:.2f}".replace(".", ",") + f" % ({E(str(vut_anyo))})" if vut_pct else ""} del total de viviendas censadas. Fuente: <a href="https://www.ine.es/">INE</a> (Estadística de Viviendas Turísticas).</p>{_descarga("viviendas-turisticas-ccaa")}</div>
 
+<h2 id="tasas">Tasas por 1.000 viviendas <span>· comparables entre CCAA</span></h2>
+<div class="panel">
+<p style="font-size:.85rem;margin:0 0 10px">Para comparar comunidades de tamaños distintos se normaliza por el <b>total de viviendas censadas</b> (denominador derivado del % de viviendas turísticas que publica el INE). <b>Lanzamientos</b> {E(str(lz_per))} anualizados (×4) y <b>ejecuciones</b> {E(str(eh_anyo))} por 1.000 viviendas.</p>
+<table><thead><tr><th>CCAA</th><th class="num">Lanzamientos ‰<br><span class="mut" style="font-weight:400">anualizado</span></th><th class="num">Ejecuciones ‰</th></tr></thead><tbody>{tasas_rows}</tbody></table>
+<p class="mut" style="font-size:.78rem;margin:8px 0 0">Una tasa alta no implica por sí sola más problema social: depende del parque de viviendas y de la litigiosidad. La lectura correcta es <b>comparar</b> CCAA, no ordenarlas como un ranking.</p></div>
+
 <h2 id="inflacion">Inflación residencial <span>· IPC (INE, base 2025)</span></h2>
 <div class="panel">
 <p style="font-size:.85rem;margin:0 0 10px"><b>Vivienda, agua, electricidad, gas y otros combustibles</b> (grupo 04): <b>12,26 %</b> de la cesta del IPC de 2026{f" · último dato {E(_etq_mes(ipc_viv_per))}, <b>{_pct(ipc_viv_ult)}</b>" if ipc_viv_ult is not None else ""}. Variación anual de cada componente:</p>
@@ -995,11 +1038,14 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 <h2 id="control">Punto de control · decretos de sep–oct 2026</h2>
 <div class="panel">
 <p style="margin:0 0 12px">Los RDL 26/2026 y 27/2026 fueron aprobados el {_txt_ap} y publicados en el BOE el {_txt_bo}. <b>El Congreso acordó su derogación el 2-oct-2026</b> (art. 86.2 CE), de modo que <b>sus medidas quedan sin efecto</b>. La <b>referencia</b> es el último dato disponible de cada serie <b>en su propio periodo</b> (no una fecha de corte): precios (IPV/IPVA), lanzamientos (CGPJ), ejecuciones (INE) y viviendas turísticas (VUT).</p>
-<table><thead><tr><th>Indicador</th><th class="num">Referencia · valor · periodo</th><th class="num">Último dato · valor · periodo</th><th class="num">Δ</th><th>Fuente</th></tr></thead><tbody>{filas_control}</tbody></table>
+{_tabla_control}
 <p class="mut" style="font-size:.8rem">⚠️ <b>Los RDL fueron derogados por el Congreso el 2-oct-2026</b>, por lo que <b>no cabe atribuir a sus medidas</b> ningún cambio posterior en las series; este bloque se conserva como registro metodológico. Los datos publicados describen periodos anteriores a los RDL; la primera lectura posterior (4T-2026) llegará en <b>~feb-2027</b>.</p>{_descarga("punto-control")}</div>
 
-<h2 id="comparador">{E(region)} frente a España</h2>
-<div class="panel"><table><thead><tr><th>Indicador</th><th>Periodo</th><th class="num">España</th><th class="num">{E(region)}</th></tr></thead><tbody>{comp_rows}</tbody></table></div>
+<h2 id="comparador"><span id="cmp-region">{E(region)}</span> frente a España</h2>
+<div class="panel">
+<p style="margin:0 0 10px"><label>Elige la comunidad: <select id="regsel">{_opts}</select></label></p>
+<table><thead><tr><th>Indicador</th><th>Periodo</th><th class="num">España</th><th class="num">Región</th></tr></thead><tbody>{comp_rows}</tbody></table>
+<p class="mut" style="font-size:.78rem;margin:8px 0 0">El IPV compara la variación anual de la región con la nacional; los lanzamientos, el trimestre más reciente del CGPJ.</p></div>
 
 <h2 id="calendario">Calendario de publicaciones</h2>
 <div class="panel">{cal}</div>
@@ -1024,6 +1070,19 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 </div>
 </main>
 <footer>Observatorio de la vivienda · microservicio de <a href="https://pruebapublica.com">pruebapublica.com</a> · datos solo de fuentes <b>públicas</b> (INE/CGPJ/BOE).<br>No analiza redes ni coordinación: solo hechos oficiales y su evolución · <a href="https://github.com/mcasrom/vivienda-osint" target="_blank" rel="noopener">código abierto</a> · v{VERSION}</footer>
+<script>
+var CMP={comp_json}, NAT={nat_json};
+var sel=document.getElementById('regsel');
+function f1(v){{return v.toFixed(1).replace('.',',')+' %';}}
+function fi(v){{return v.toLocaleString('es-ES');}}
+function upd(){{
+  var d=CMP[sel.value]||{{}};
+  document.getElementById('cmp-region').textContent=d.nombre||'';
+  document.getElementById('cmp-ipv').innerHTML='<td>Compraventa (IPV, var. anual)</td><td>'+NAT.ipv_per+'</td><td class="num">'+NAT.ipv_txt+'</td><td class="num">'+(d.ipv!=null?f1(d.ipv):'sin dato')+'</td>';
+  document.getElementById('cmp-lz').innerHTML='<td>Lanzamientos judiciales</td><td>'+NAT.lz_per+'</td><td class="num">'+NAT.lz_txt+'</td><td class="num">'+(d.lz!=null?fi(d.lz):'sin dato')+'</td>';
+}}
+sel.addEventListener('change',upd);
+</script>
 </body></html>"""
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:

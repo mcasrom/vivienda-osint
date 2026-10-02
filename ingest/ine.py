@@ -130,8 +130,26 @@ def ingest_vte() -> int:
                     continue
                 c.execute("INSERT OR REPLACE INTO ine_serie VALUES(?,?,?,?)",
                           ("vte_pct", str(y.get("Anyo")), "pct", float(y["Valor"])))
+        elif "Porcentaje de viviendas turísticas sobre el total de viviendas censadas" in nom:
+            # % por CCAA → permite derivar el total de viviendas (denominador de tasas)
+            canon = territorios.canonico(nom.split(".")[0].strip())
+            if canon:
+                n += c.execute("INSERT OR REPLACE INTO ine_serie VALUES(?,?,?,?)",
+                               ("vte_pct:" + canon, str(x.get("Anyo")), canon,
+                                float(x["Valor"]))).rowcount
     c.commit()
     return n
+
+
+def vte_pct_ccaa():
+    """{ccaa_canónico: % de viviendas turísticas sobre el total censado} (último dato)."""
+    c = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
+    anyo = c.execute("SELECT MAX(fecha) FROM ine_serie WHERE serie LIKE 'vte_pct:%'").fetchone()[0]
+    if not anyo:
+        return {}
+    return {e: v for e, v in c.execute(
+        "SELECT etiqueta, valor FROM ine_serie WHERE serie LIKE 'vte_pct:%' AND fecha=?",
+        (anyo,)).fetchall()}
 
 
 # Nombres oficiales INE de las 19 comunidades/ciudades autónomas. La tabla 46141

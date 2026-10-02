@@ -181,7 +181,8 @@ if os.path.exists(json_latest) and os.path.exists(html_p):
     tarjetas = re.findall(
         r'<div class="ind"><div class="v">([^<]+)<small>([^<]*)</small></div>'
         r'<div class="t ([^"]*)">([^<]*)</div>'
-        r'<div class="f">([^<]+)<br><span class="mut">([^<]*)</span></div>', page)
+        r'<div class="f">([^<]+)<br><span class="mut">([^<]*)</span>'
+        r'(?: · <span class="mut">([^<]*)</span>)?</div>', page)
     CLAVE = {"IPV (compraventa)": "ipv", "IPVA (alquiler)": "ipva",
              "lanzamientos": "lz", "ejecuciones": "eh"}
     # la portada lleva 4 tarjetas; la VUT se publica como ranking, no como indicador
@@ -189,7 +190,7 @@ if os.path.exists(json_latest) and os.path.exists(html_p):
           f"la portada tiene {len(tarjetas)} tarjetas y se esperan {len(CLAVE)}")
     check(set(ind) - set(CLAVE.values()) == {"vut"},
           f"latest.json publica {sorted(set(ind) - set(CLAVE.values()))} y solo la VUT va como ranking")
-    for valor, _unidad, cls, tend_txt, fuente, per_txt in tarjetas:
+    for valor, _unidad, cls, tend_txt, fuente, per_txt, _act in tarjetas:
         k = next((v for c, v in CLAVE.items() if c in fuente), None)
         check(k is not None, f"tarjeta de fuente desconocida: {fuente!r}")
         if k is None:
@@ -221,7 +222,7 @@ if not os.path.exists(html_p):
     OMITIDO.append("web/index.html (generado)")
 if os.path.exists(html_p):
     fila_ipv = re.search(
-        r'<tr><td>Compraventa \(IPV, var\. anual\)</td><td>([^<]*)</td>'
+        r'<tr[^>]*><td>Compraventa \(IPV, var\. anual\)</td><td>([^<]*)</td>'
         r'<td class="num">([^<]*)</td><td class="num">([^<]*)</td></tr>', page)
     check(fila_ipv is not None, "la página no tiene la fila del comparador de IPV")
     if fila_ipv:
