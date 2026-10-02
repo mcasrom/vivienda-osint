@@ -9,7 +9,7 @@ from datetime import date
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from ingest import boe as boeing, via, ine, cgpj, territorios, frescura, ipc  # noqa: E402
+from ingest import boe as boeing, via, ine, cgpj, territorios, frescura, ipc, serpavi  # noqa: E402
 
 # Directorio de salida: por defecto web/ (público); el cron/publicar por staging
 # usa web_tmp/ y solo intercambia si el contrato de datos pasa (regla: publicar
@@ -588,6 +588,20 @@ def build():
 
     tasas_rows = "".join(f'<tr><td>{E(_c)}</td><td class="num">{_r1(_l)}</td>'
                          f'<td class="num">{_r1(_e)}</td></tr>' for _c, _l, _e in _tasas)
+
+    # SERPAVI / MIVAU — alquiler de referencia por municipio (contratos, no oferta)
+    _serp_n, _serp_anio = serpavi.total_anio()
+
+    def _serp_rows(_rows):
+        _out = []
+        for _m, _p, _v in _rows:
+            _vs = f"{_v:.2f}".replace(".", ",")
+            _out.append(f'<tr><td>{E(_m)} <span class="mut">{E(_p)}</span></td>'
+                        f'<td class="num">{_vs} €/m²</td></tr>')
+        return "".join(_out)
+
+    _serp_top_rows = _serp_rows(serpavi.top(12))
+    _serp_bot_rows = _serp_rows(serpavi.bottom(12))
     ipva_s = ine.serie("ipva_var_anual")
     ipva_var = ipva_s[-1][1] if ipva_s else None
     tend_ia, _ = _tendencia(ipva_s)
@@ -854,6 +868,16 @@ def build():
                        ["periodo"] + _comp_cols,
                        [{"periodo": f, **{c: _ipc_map[c].get(f, "") for c in _comp_cols}}
                         for f in _ipc_fechas], datasets)
+    if _serp_n:
+        _serp_all = sqlite3.connect(f"file:{boeing.DB}?mode=ro", uri=True).execute(
+            "SELECT codigo_ine,municipio,provincia,eur_m2,p25,p75,anio FROM serpavi "
+            "ORDER BY eur_m2 DESC").fetchall()
+        _write_dataset("alquiler-serpavi", "Alquiler de referencia por municipio (SERPAVI/MIVAU)",
+                       "MIVAU · SERPAVI (contratos, fianzas Catastro/AEAT)", _serp_anio,
+                       "MIVAU — reutilización citando la fuente",
+                       ["codigo_ine", "municipio", "provincia", "eur_m2", "p25", "p75", "anio"],
+                       [{"codigo_ine": r[0], "municipio": r[1], "provincia": r[2], "eur_m2": r[3],
+                         "p25": r[4], "p75": r[5], "anio": r[6]} for r in _serp_all], datasets)
     with open(os.path.join(DATA_DIR, "index.json"), "w", encoding="utf-8") as f:
         json.dump({"observatorio": "Observatorio de la vivienda",
                    "url": "https://vivienda.pruebapublica.com/", "generado": hoy, "series": datasets},
@@ -1026,6 +1050,15 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 <table><thead><tr><th>CCAA</th><th class="num">Lanzamientos ‰<br><span class="mut" style="font-weight:400">anualizado</span></th><th class="num">Ejecuciones ‰</th></tr></thead><tbody>{tasas_rows}</tbody></table>
 <p class="mut" style="font-size:.78rem;margin:8px 0 0">Una tasa alta no implica por sí sola más problema social: depende del parque de viviendas y de la litigiosidad. La lectura correcta es <b>comparar</b> CCAA, no ordenarlas como un ranking.</p></div>
 
+<h2 id="alquiler">Alquiler de referencia por municipio <span>· SERPAVI / MIVAU</span></h2>
+<div class="panel">
+<p style="font-size:.85rem;margin:0 0 10px">Mediana del alquiler de los <b>contratos</b> (fianzas Catastro/AEAT), no precio de oferta. {_serp_n} municipios, dato de {E(_serp_anio)}. Fuente: <a href="https://www.mivau.gob.es/">MIVAU (SERPAVI)</a>.</p>
+<div class="grid">
+<div><p class="mut" style="font-size:.8rem;margin:0 0 4px"><b>Más caros</b> (€/m²/mes)</p><table><tbody>{_serp_top_rows}</tbody></table></div>
+<div><p class="mut" style="font-size:.8rem;margin:0 0 4px"><b>Más baratos</b> (€/m²/mes)</p><table><tbody>{_serp_bot_rows}</tbody></table></div>
+</div>
+<p class="mut" style="font-size:.78rem;margin:10px 0 0">⚠️ Es la mediana de <b>todos</b> los contratos (incluidos los antiguos con renta congelada), así que suele ser <b>más baja</b> que el precio de un contrato nuevo. El CSV oficial es agregado y <b>no publica el nº de contratos (n)</b> por municipio; MIVAU solo incluye municipios con datos suficientes. No se mezcla con precio de oferta.</p>{_descarga("alquiler-serpavi")}</div>
+
 <h2 id="inflacion">Inflación residencial <span>· IPC (INE, base 2025)</span></h2>
 <div class="panel">
 <p style="font-size:.85rem;margin:0 0 10px"><b>Vivienda, agua, electricidad, gas y otros combustibles</b> (grupo 04): <b>12,26 %</b> de la cesta del IPC de 2026{f" · último dato {E(_etq_mes(ipc_viv_per))}, <b>{_pct(ipc_viv_ult)}</b>" if ipc_viv_ult is not None else ""}. Variación anual de cada componente:</p>
@@ -1099,7 +1132,7 @@ sel.addEventListener('change',upd);
         f.write(_propiedad_html())
     with open(os.path.join(OUT_DIR, "datos.html"), "w", encoding="utf-8") as f:
         f.write(_datos_html(datasets))
-    print(f"[gen] index + fuentes + propiedad + datos + {len(datasets)} series (CSV/JSON) · IPV={len(ipv)} pts · EH CCAA={len(eh)} · alquiler NO publicado ({v['n']} municipios disponibles, muestra no publicable)")
+    print(f"[gen] index + fuentes + propiedad + datos + {len(datasets)} series (CSV/JSON) · IPV={len(ipv)} pts · EH CCAA={len(eh)} · alquiler SERPAVI {_serp_n} municipios (oferta de portales NO publicable: muestra de {v['n']})")
 
 
 if __name__ == "__main__":

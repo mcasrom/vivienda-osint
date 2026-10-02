@@ -295,6 +295,26 @@ else:
               "la portada no incluye la sección «Inflación residencial» (id=inflacion)")
         check("grupo 04" in page, "la sección de inflación no menciona el grupo 04")
 
+# ---------------------------------------------------------------------------
+# 14. Alquiler SERPAVI/MIVAU por municipio (contratos, no oferta)
+# ---------------------------------------------------------------------------
+p_serp = os.path.join(WEB, "data", "alquiler-serpavi.csv")
+if not os.path.exists(p_serp):
+    OMITIDO.append("web/data/alquiler-serpavi.csv (generado; requiere ingest.serpavi)")
+else:
+    with open(p_serp, encoding="utf-8") as fh:
+        _rd_serp = csv.DictReader(fh)
+        _campos_serp = _rd_serp.fieldnames or []
+        _filas_serp = list(_rd_serp)
+    for col in ("codigo_ine", "municipio", "eur_m2", "anio"):
+        check(col in _campos_serp, f"alquiler-serpavi.csv: falta '{col}'")
+    check(len(_filas_serp) >= 100, f"alquiler-serpavi.csv: solo {len(_filas_serp)} filas")
+    _vals = [float(r["eur_m2"]) for r in _filas_serp if r.get("eur_m2")]
+    check(bool(_vals) and 1 < min(_vals) and max(_vals) < 40,
+          f"alquiler-serpavi.csv: €/m² fuera de rango plausible: {_vals and (min(_vals), max(_vals))}")
+    if os.path.exists(html_p):
+        check('id="alquiler"' in page, "la portada no incluye la sección de alquiler SERPAVI")
+
 if FALLOS:
     print(f"FALLOS ({len(FALLOS)}):", file=sys.stderr)
     for f in FALLOS:

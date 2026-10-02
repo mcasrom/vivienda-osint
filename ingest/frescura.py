@@ -29,7 +29,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SIDE = os.path.join(ROOT, "data", "frescura.json")
 
 # Orden de presentación y nombre legible de cada fuente.
-FUENTES = (("ine", "INE"), ("ipc", "INE · IPC"), ("cgpj", "CGPJ"), ("boe", "BOE"))
+FUENTES = (("ine", "INE"), ("ipc", "INE · IPC"), ("serpavi", "MIVAU · SERPAVI"), ("cgpj", "CGPJ"), ("boe", "BOE"))
 NOMBRE = dict(FUENTES)
 
 

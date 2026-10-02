@@ -8,7 +8,7 @@ echo "[$(date -u +%F" "%T)] vivienda cron"
 # Ingesta por fuente: se captura el rc REAL de cada una y se registra su estado
 # en data/frescura.json (F2). Antes `cmd || echo "X fallo"` dejaba el fallo solo
 # en el log: la web seguía sirviendo datos viejos como si fueran de hoy.
-for fuente in boe ine ipc cgpj; do
+for fuente in boe ine ipc serpavi cgpj; do
   if ./venv/bin/python -m "ingest.$fuente" >> logs/ingesta.log 2>&1; then
     ./venv/bin/python -m ingest.frescura --fuente "$fuente" --ok >> logs/ingesta.log 2>&1 \
       || echo "[$(date -u +%F" "%T)] frescura $fuente --ok fallo" >> logs/ingesta.log
