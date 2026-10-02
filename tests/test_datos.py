@@ -142,6 +142,53 @@ if os.path.exists(html_p):
             except ValueError:
                 FALLOS.append(f"{did}: valor no numérico en la página para '{nb_html}': {v_html!r}")
 
+# ---------------------------------------------------------------------------
+# 10. Contrato de tendencia: la flecha y el color de la tarjeta == latest.json
+# ---------------------------------------------------------------------------
+# «se modera» es una deceleración, no una bajada: el nivel sigue en +12,2 % y la
+# tarjeta no puede pintarse como una caída (flecha ▼ / clase verde de bajada).
+FLECHAS = {"se modera": ("▬", ""), "sube más": ("▲", "up"), "estable": ("▬", ""),
+           "subiendo": ("▲", "up"), "bajando": ("▼", "down")}
+json_latest = os.path.join(ROOT, "web", "data", "latest.json")
+check(os.path.exists(json_latest), "falta web/data/latest.json")
+if os.path.exists(json_latest) and os.path.exists(html_p):
+    ind = json.load(open(json_latest, encoding="utf-8"))["indicadores"]
+    tarjetas = re.findall(
+        r'<div class="ind"><div class="v">([^<]+)<small>([^<]*)</small></div>'
+        r'<div class="t ([^"]*)">([^<]*)</div>'
+        r'<div class="f">([^<]+)<br><span class="mut">([^<]*)</span></div>', page)
+    CLAVE = {"IPV (compraventa)": "ipv", "IPVA (alquiler)": "ipva",
+             "lanzamientos": "lz", "ejecuciones": "eh"}
+    # la portada lleva 4 tarjetas; la VUT se publica como ranking, no como indicador
+    check(len(tarjetas) == len(CLAVE),
+          f"la portada tiene {len(tarjetas)} tarjetas y se esperan {len(CLAVE)}")
+    check(set(ind) - set(CLAVE.values()) == {"vut"},
+          f"latest.json publica {sorted(set(ind) - set(CLAVE.values()))} y solo la VUT va como ranking")
+    for valor, _unidad, cls, tend_txt, fuente, per_txt in tarjetas:
+        k = next((v for c, v in CLAVE.items() if c in fuente), None)
+        check(k is not None, f"tarjeta de fuente desconocida: {fuente!r}")
+        if k is None:
+            continue
+        etq = ind[k]["tendencia"]
+        check(etq in FLECHAS, f"{k}: tendencia {etq!r} sin flecha definida en el test")
+        if etq not in FLECHAS:
+            continue
+        fl, cls_esp = FLECHAS[etq]
+        check(tend_txt.strip() == f"{fl} {etq}",
+              f"{k}: la tarjeta pinta {tend_txt.strip()!r} y latest.json dice {etq!r} "
+              f"(flecha esperada {fl!r})")
+        check(cls.strip() == cls_esp,
+              f"{k}: color {cls.strip()!r} para la tendencia {etq!r} (esperado {cls_esp!r})")
+        num = valor.replace(".", "").replace(",", ".").rstrip("% ")
+        try:
+            check(abs(float(num) - float(ind[k]["valor"])) < 1e-6,
+                  f"{k}: la tarjeta muestra {valor!r} y latest.json {ind[k]['valor']}")
+        except ValueError:
+            FALLOS.append(f"{k}: valor no numérico en la tarjeta: {valor!r}")
+        # la tarjeta puede anteponer un calificador («variación anual · 2026 2T»)
+        check(ind[k]["periodo"] in per_txt,
+              f"{k}: periodo {per_txt.strip()!r} en la tarjeta y {ind[k]['periodo']!r} en latest.json")
+
 if FALLOS:
     print(f"FALLOS ({len(FALLOS)}):", file=sys.stderr)
     for f in FALLOS:

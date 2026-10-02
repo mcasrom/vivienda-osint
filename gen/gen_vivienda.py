@@ -352,8 +352,15 @@ def bloque_barras(pares, color, fmt=None, unidad="", top=10, grupo="grupos"):
 
 
 def _ind(valor, unidad, tend, etq_tend, fuente, periodo):
-    cls = {"subiendo": "up", "bajando": "down", "estable": ""}.get(tend, "")
-    fl = {"subiendo": "▲", "bajando": "▼", "estable": "▬"}.get(tend, "")
+    # Una variación que «se modera» NO es una bajada: el nivel sigue subiendo, lo que
+    # se frena es su ritmo (IPV +12,2 % anual). Pintarla con la flecha de «bajando» hacía
+    # que una tarjeta en verde con un número positivo se leyera como precio en caída.
+    # La deceleración usa flecha neutra; ▼/verde queda solo para bajadas de nivel reales.
+    if etq_tend == "se modera":
+        cls, fl = "", "▬"
+    else:
+        cls = {"subiendo": "up", "bajando": "down", "estable": ""}.get(tend, "")
+        fl = {"subiendo": "▲", "bajando": "▼", "estable": "▬"}.get(tend, "")
     return (f'<div class="ind"><div class="v">{valor}<small>{unidad}</small></div>'
             f'<div class="t {cls}">{fl} {etq_tend}</div><div class="f">{etiqueta_src(fuente, periodo)}</div></div>')
 
