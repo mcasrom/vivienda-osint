@@ -4,7 +4,7 @@ Fuente: https://www.boe.es/datosabiertos/api/boe/sumario/YYYYMMDD (requiere Acce
 Guarda los items que mencionan vivienda/alquiler/desahucio/... en data/vivienda.db.
 """
 from __future__ import annotations
-import os, re, sqlite3, urllib.request, xml.etree.ElementTree as ET
+import os, re, sqlite3, urllib.error, urllib.request, xml.etree.ElementTree as ET
 from datetime import date, timedelta
 
 API = "https://www.boe.es/datosabiertos/api/boe/sumario/%s"
@@ -67,6 +67,11 @@ def _parse(xml: bytes, d: date):
     return out
 
 
+
+def _es_domingo(d: date) -> bool:
+    """El BOE no publica sumario los domingos: un 404 ahí es lo normal, no un fallo."""
+    return d.weekday() == 6
+
 def ingest(dias: int = 21) -> int:
     c = _con()
     n = 0
@@ -77,8 +82,14 @@ def ingest(dias: int = 21) -> int:
         d = hoy - timedelta(days=i)
         try:
             items = _parse(_fetch(d), d)
+        except urllib.error.HTTPError as e:
+            # domingo (o festivo) sin sumario: esperado. El resto de códigos, no.
+            if e.code == 404 and _es_domingo(d):
+                continue
+            print(f"[boe] {d} sumario no disponible (HTTP {e.code})", flush=True)
+            continue
         except Exception as e:  # noqa: BLE001
-            print(f"[boe] {d} sin sumario ({type(e).__name__})", flush=True)
+            print(f"[boe] {d} sin sumario ({type(e).__name__}: {e})", flush=True)
             continue
         for it in items:
             cur = c.execute("INSERT OR REPLACE INTO boe(id,fecha,titulo,url,departamento,seccion,ambito) "
