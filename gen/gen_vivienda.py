@@ -4,7 +4,7 @@ Estructura: Indicadores · IPV · Alquiler · Mapa de calor provincial · Compar
 Calendario · Registro de medidas · Método y límites. Sin puntuaciones compuestas.
 """
 from __future__ import annotations
-import os, sys, sqlite3, html, json, csv
+import os, sys, sqlite3, html, json, csv, math
 from datetime import date
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -475,9 +475,27 @@ def _etq_mes(f):
         return str(f)
 
 
-def svg_multiline(series, w=780, h=250, fmt=None):
-    """Varias líneas sobre el mismo eje Y. `series` = [(label, color, [(fecha, valor)])].
-    Alineadas por fecha (intersección); leyenda al final de cada línea. Sin librerías."""
+def _nice_ticks(mn, mx, n=5):
+    """Valores «redondos» de Y para la rejilla (paso 1/2/2,5/5/10)."""
+    if not (mx > mn):
+        mx = mn + 1
+    span = mx - mn
+    step = 10 ** math.floor(math.log10(span / n))
+    for mult in (1, 2, 2.5, 5, 10):
+        if span / (step * mult) <= n:
+            step *= mult
+            break
+    lo, hi, out, v = math.floor(mn / step) * step, math.ceil(mx / step) * step, [], math.floor(mn / step) * step
+    while v <= hi + 1e-9:
+        out.append(round(v, 2))
+        v += step
+    return out
+
+
+def svg_multiline(series, w=780, h=270, fmt=None, ticks_n=5):
+    """Varias líneas sobre el mismo eje Y, con **rejilla y valores del eje Y**
+    rotulados, leyenda con el último valor de cada línea y eje X con las fechas.
+    `series` = [(label, color, [(fecha, valor)])]; alineadas por fecha (intersección)."""
     fmt = fmt or (lambda v: f"{v:.1f}".replace(".", ","))
     sets = [set(f for f, _ in s) for _, _, s in series if s]
     if not sets:
@@ -487,28 +505,38 @@ def svg_multiline(series, w=780, h=250, fmt=None):
         return "<p class='mut'>serie no conectada</p>"
     mapas = [dict(s) for _, _, s in series]
     allv = [mapas[i][f] for i in range(len(series)) for f in comun]
-    mn, mx = min(min(allv), 0), max(allv)
+    ticks = _nice_ticks(min(allv), max(allv), ticks_n)
+    mn, mx = min(ticks), max(ticks)
     rng = (mx - mn) or 1
     n = len(comun)
+    l, r, t, b = 52, 122, 14, 34
 
     def xy(i, v):
-        return 40 + i * (w - 80) / (n - 1), h - 40 - (v - mn) / rng * (h - 90)
+        return l + i * (w - l - r) / (n - 1), h - b - (v - mn) / rng * (h - t - b)
 
-    zero = h - 40 - (0 - mn) / rng * (h - 90)
     out = [f'<svg viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg" style="width:100%">']
-    out.append(f'<line x1="40" y1="{zero:.0f}" x2="{w-40}" y2="{zero:.0f}" stroke="#cbd5e1"/>')
+    for tv in ticks:                                    # rejilla + valores Y
+        _, y = xy(0, tv)
+        out.append(f'<line x1="{l}" y1="{y:.0f}" x2="{w-r}" y2="{y:.0f}" stroke="#e2e8f0"/>')
+        out.append(f'<text x="{l-6}" y="{y+3:.0f}" font-size="9.5" fill="#64748b" '
+                   f'text-anchor="end">{E(fmt(tv))}%</text>')
+    if mn <= 0 <= mx:                                   # línea 0 destacada
+        _, y0 = xy(0, 0)
+        out.append(f'<line x1="{l}" y1="{y0:.0f}" x2="{w-r}" y2="{y0:.0f}" stroke="#94a3b8"/>')
     for idx, (label, color, _s) in enumerate(series):
         pts = [xy(i, mapas[idx][f]) for i, f in enumerate(comun)]
-        poly = " ".join(f"{x:.0f},{y:.0f}" for x, y in pts)
-        out.append(f'<polyline points="{poly}" fill="none" stroke="{color}" stroke-width="2.4"/>')
+        out.append('<polyline points="' + " ".join(f"{x:.0f},{y:.0f}" for x, y in pts)
+                   + f'" fill="none" stroke="{color}" stroke-width="2.4"/>')
+        for x, y in pts:
+            out.append(f'<circle cx="{x:.0f}" cy="{y:.0f}" r="2.2" fill="{color}"/>')
         xl, yl = pts[-1]
-        out.append(f'<circle cx="{xl:.0f}" cy="{yl:.0f}" r="2.6" fill="{color}"/>')
-        out.append(f'<text x="{xl+6:.0f}" y="{yl+3:.0f}" font-size="10" fill="{color}" font-weight="700">{E(label)}</text>')
+        out.append(f'<text x="{xl+6:.0f}" y="{yl+3:.0f}" font-size="10" fill="{color}" '
+                   f'font-weight="700">{E(label)} {E(fmt(mapas[idx][comun[-1]]))}%</text>')
     step = max(1, n // 8)
-    for i, f in enumerate(comun):
+    for i, f in enumerate(comun):                       # eje X
         if i % step == 0 or i == n - 1:
             x, _ = xy(i, mn)
-            out.append(f'<text x="{x:.0f}" y="{h-14}" font-size="9.5" fill="#64748b" '
+            out.append(f'<text x="{x:.0f}" y="{h-12}" font-size="9.5" fill="#64748b" '
                        f'text-anchor="middle">{E(_etq_mes(f))}</text>')
     out.append("</svg>")
     return "".join(out)
@@ -603,6 +631,25 @@ def build():
                         fmt=lambda v: f"{v:.2f}".replace(".", ",") + " pp",
                         unidad="", h=max(150, len(ipc_contrib) * 30))
     ipc_viv_ult, ipc_viv_per = ipc.ultimo("vivienda", "var_anual")
+    # detalle numérico cronológico (tabla plegable bajo el gráfico)
+    ipc_tabla = ""
+    if ipc_series:
+        _comun = sorted(set.intersection(*[set(f for f, _ in s) for _, _, s in ipc_series]))
+        _maps = {lab: dict(s) for lab, _, s in ipc_series}
+
+        def _pv(v):
+            return (f"{v:.1f}".replace(".", ",") + " %") if v is not None else "—"
+
+        _head = "".join(f'<th class="num">{E(lab)}</th>' for lab, _, _ in ipc_series)
+        _rows = "".join(
+            f'<tr><td>{E(_etq_mes(f))}</td>'
+            + "".join(f'<td class="num">{E(_pv(_maps[lab].get(f)))}</td>' for lab, _, _ in ipc_series)
+            + "</tr>" for f in _comun)
+        ipc_tabla = (
+            f'<details style="margin-top:10px"><summary style="cursor:pointer;font-weight:600;'
+            f'font-size:.82rem;color:var(--ink)">Ver los valores · {len(_comun)} meses</summary>'
+            f'<table style="margin-top:8px"><thead><tr><th>Periodo</th>{_head}</tr></thead>'
+            f'<tbody>{_rows}</tbody></table></details>')
 
     eh_bars = "".join(
         f'<tr><td>{E(k)}</td><td class="num">{int(v):,}</td>'.replace(",", ".") + "</tr>"
@@ -935,6 +982,7 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 <div class="panel">
 <p style="font-size:.85rem;margin:0 0 10px"><b>Vivienda, agua, electricidad, gas y otros combustibles</b> (grupo 04): <b>12,26 %</b> de la cesta del IPC de 2026{f" · último dato {E(_etq_mes(ipc_viv_per))}, <b>{_pct(ipc_viv_ult)}</b>" if ipc_viv_ult is not None else ""}. Variación anual de cada componente:</p>
 {ipc_multiline}
+{ipc_tabla}
 <p style="font-size:.85rem;margin:20px 0 2px"><b>¿Qué encarece el coste residencial?</b> Contribución de cada componente a la variación del grupo 04 (<b>variación anual × su peso</b>), en puntos porcentuales.</p>
 {ipc_bars}
 <p class="mut" style="font-size:.8rem">Fuente: <a href="https://www.ine.es/">INE</a>, IPC base 2025 (ECOICOP v2). Un <b>índice no es un precio</b>, y el grupo 04 <b>no</b> es el coste total del hogar (no incluye alimentación, transporte…). Solo variación anual: la base cambió en ene-2026 y <b>no</b> se cruza con la anterior.</p>{_descarga("ipc-vivienda")}</div>
