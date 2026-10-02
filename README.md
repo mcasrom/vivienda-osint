@@ -114,8 +114,10 @@ Reglas:
 - La página **no anticipa** el resultado: mientras se vota, muestra «pendiente» con la
   fecha y hora de la votación.
 - Actualizar el estado solo con prueba oficial (la Resolución publicada), con un
-  **watchdog automático** (`scripts/watchdog_rdl.py`) que consulta el BOE varias veces al
-  día, avisa por Telegram y solo cambia el registro con la versión `--aplicar`.
+  **watchdog automático** (`scripts/watchdog_rdl.py`) que consulta el BOE **cada 30 min**:
+  cuando aparece la Resolución, **transcribe el acuerdo a `data/normas.json`** (convalidación
+  o derogación) y **regenera solo** por la puerta de staging —protegida por `test_datos`—,
+  además de avisar por Telegram. No es «decidir»: es transcribir un hecho oficial con fuente.
 
 ## Calidad: contratos y CI
 

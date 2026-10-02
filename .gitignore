@@ -5,6 +5,8 @@ venv/
 data/*.db
 data/frescura.json
 data/frescura.json.tmp
+data/watchdog_estado.json
+data/watchdog_sumarios.json
 logs/
 web/index.html
 web/fuentes.html
