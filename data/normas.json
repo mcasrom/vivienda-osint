@@ -1,0 +1,50 @@
+{
+  "actualizado": "2026-10-02T07:45:00Z",
+  "nota": "Estado de las normas registradas en el observatorio. El estado se actualiza solo con fuente oficial (BOE o Resolución del Congreso); no se infiere ni se anticipa. Los títulos oficiales completos se leen de la tabla boe (ingest/boe.py), no se duplican aquí.",
+  "estados": ["publicada", "en_votacion", "convalidada", "derogada"],
+  "marco": {
+    "descripcion": "El artículo 86.2 CE obliga al Congreso de los Diputados a pronunciarse expresamente, dentro de los treinta días siguientes a la promulgación, sobre la convalidación o la derogación del Decreto-ley.",
+    "url": "https://www.boe.es/buscar/act.php?bj=a86&id=BOE-A-1978-31229&tn=5",
+    "registro": "El acuerdo se publica como Resolución del Congreso de los Diputados en el BOE, sección I, dentro de los días siguientes a la votación.",
+    "ejemplos": [
+      {"etiqueta": "convalidación (RDL 2/2023, BOE-A-2023-8221)", "url": "https://www.boe.es/diario_boe/txt.php?id=BOE-A-2023-8221"},
+      {"etiqueta": "derogación (RDL 2/2026, BOE-A-2026-4667)", "url": "https://www.boe.es/diario_boe/txt.php?id=BOE-A-2026-4667"}
+    ]
+  },
+  "normas": [
+    {
+      "id": "BOE-A-2026-20266",
+      "corta": "RDL 26/2026",
+      "resumen": "protección de la función social de la vivienda",
+      "organo": "Jefatura del Estado",
+      "ambito": "estatal",
+      "aprobacion": "2026-09-29",
+      "boe": "2026-09-30",
+      "vigencia": "2026-10-01",
+      "vigencia_nota": "Entrada en vigor al día siguiente de su publicación (disposición final undécima), sin perjuicio de la convalidación o derogación por el Congreso (art. 86.2 CE).",
+      "estado": "en_votacion",
+      "estado_fecha": "2026-10-02",
+      "estado_nota": "Pendiente de la votación del Congreso. El observatorio no anticipa el resultado.",
+      "votacion": {"fecha": "2026-10-02", "hora": "11:00", "organo": "Congreso de los Diputados"},
+      "resultado": null,
+      "resultado_fecha": null
+    },
+    {
+      "id": "BOE-A-2026-20385",
+      "corta": "RDL 27/2026",
+      "resumen": "estabilidad de los contratos de arrendamiento de vivienda habitual",
+      "organo": "Jefatura del Estado",
+      "ambito": "estatal",
+      "aprobacion": "2026-09-29",
+      "boe": "2026-10-01",
+      "vigencia": "2026-10-02",
+      "vigencia_nota": "Entrada en vigor al día siguiente de su publicación (disposición final segunda), sin perjuicio de la convalidación o derogación por el Congreso (art. 86.2 CE).",
+      "estado": "en_votacion",
+      "estado_fecha": "2026-10-02",
+      "estado_nota": "Pendiente de la votación del Congreso. El observatorio no anticipa el resultado.",
+      "votacion": {"fecha": "2026-10-02", "hora": "11:00", "organo": "Congreso de los Diputados"},
+      "resultado": null,
+      "resultado_fecha": null
+    }
+  ]
+}

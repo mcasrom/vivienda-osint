@@ -15,13 +15,42 @@ OUT = os.path.join(ROOT, "web", "index.html")
 DATA_DIR = os.path.join(ROOT, "web", "data")
 E = html.escape
 
-# Registro de medidas (se anotan sobre las series; NO se afirma causalidad).
-MEDIDAS = [
-    ("2023-05-25", "Ley 12/2023 por el derecho a la vivienda", "https://www.boe.es/buscar/act.php?id=BOE-A-2023-12203"),
-    ("2026-09-29", "RDL 26/2026 — función social de la vivienda", "https://www.boe.es/buscar/act.php?id=BOE-A-2026-20266"),
-    ("2026-09-29", "RDL 27/2026 — medidas urgentes de vivienda", "https://www.boe.es/buscar/act.php?id=BOE-A-2026-20385"),
-]
-MED_IDS = {"BOE-A-2026-20266", "BOE-A-2026-20385"}
+# --- Registro de normas: estado y fechas (FUENTE ÚNICA) -------------------
+# El estado vive en data/normas.json y solo se cambia con fuente oficial (BOE o
+# Resolución del Congreso). No se infiere ni se anticipa. Los títulos oficiales
+# completos NO se duplican aquí: se leen de la tabla `boe` (ingest/boe.py).
+NORMAS_F = os.path.join(ROOT, "data", "normas.json")
+with open(NORMAS_F, encoding="utf-8") as _fh:
+    _REGN = json.load(_fh)
+NORMAS = {n["id"]: n for n in _REGN["normas"]}
+MED_IDS = set(NORMAS)
+MARCO = _REGN["marco"]
+ESTADO_TXT = {
+    "publicada": "Publicada",
+    "en_votacion": "Pendiente de convalidación o derogación",
+    "convalidada": "Convalidada por el Congreso",
+    "derogada": "Derogada por el Congreso",
+}
+DESENLACE_TXT = {
+    "convalidada": "el Decreto-ley queda convalidado y mantiene su vigencia",
+    "derogada": "el Decreto-ley queda derogado",
+}
+_MES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
+
+
+def _fd(s):
+    """Fecha ISO (datos) → 29-sep-2026 (texto de la página)."""
+    try:
+        d = date.fromisoformat(s)
+    except (TypeError, ValueError):
+        return s or ""
+    return f"{d.day:02d}-{_MES[d.month - 1]}-{d.year}"
+
+# Línea de tiempo: fecha de aprobación + etiqueta corta (el texto oficial va en la ficha).
+MEDIDAS = [("2023-05-25", "Ley 12/2023 por el derecho a la vivienda",
+            "https://www.boe.es/buscar/act.php?id=BOE-A-2023-12203")] + [
+    (n["aprobacion"], f'{n["corta"]} — {n["resumen"]}',
+     "https://www.boe.es/buscar/act.php?id=" + n["id"]) for n in _REGN["normas"]]
 CALENDARIO = [
     ("16/10/2026", "CGPJ — lanzamientos del 2.º trimestre"),
     ("14/12/2026", "CGPJ — lanzamientos del 3.er trimestre"),
@@ -481,14 +510,62 @@ def build():
     cal = "".join(f'<div class="m"><span class="d">{E(d)}</span> {E(t)}</div>' for d, t in CALENDARIO)
     # disposiciones del BOE (sección I) — se excluyen las ya listadas en MEDIDAS
     c = sqlite3.connect(boeing.DB)
-    boe_all = c.execute("SELECT fecha, titulo, url, departamento, ambito FROM boe ORDER BY fecha DESC").fetchall()
-    boe_rows = [(f, t, u, dep, amb) for f, t, u, dep, amb in boe_all
-                if not any(i in (u or "") for i in MED_IDS)][:8]
+    boe_all = c.execute("SELECT id, fecha, titulo, url, departamento, ambito FROM boe ORDER BY fecha DESC").fetchall()
+
+    def _estado(uid):
+        """Estado de una norma: del registro si está registrada; si no, «publicada»."""
+        return NORMAS.get(uid, {}).get("estado", "publicada")
+
+    boe_rows = [(f, t, u, dep, amb, _estado(i)) for i, f, t, u, dep, amb in boe_all
+                if not any(m in (u or "") for m in MED_IDS)][:8]
     boe_html = "".join(
-        f'<div class="card"><div class="fecha">{E(f)} · {E((dep or "").title() or "BOE")}'
-        + (f' · {E(amb)}' if amb else "") + f'</div><div class="tit">{E(t)}</div>'
+        f'<div class="card"><div class="fecha">{E(f)} · {E(dep or "BOE")}'
+        + (f' · {E(amb)}' if amb else "") + f' · {E(ESTADO_TXT.get(est, est))}</div><div class="tit">{E(t)}</div>'
         + (f'<a class="src" href="{E(u)}" target="_blank" rel="noopener">BOE ↗</a>' if u else "")
-        + "</div>" for f, t, u, dep, amb in boe_rows)
+        + "</div>" for f, t, u, dep, amb, est in boe_rows)
+
+    # --- ficha de las normas registradas -----------------------------------
+    _fichas, _ap, _bo = [], set(), set()
+    for n in _REGN["normas"]:
+        fila = next((r for r in boe_all if r[0] == n["id"]), None)
+        if fila is None:
+            print(f'[normas] AVISO: {n["id"]} no está en la tabla boe; ficha sin título oficial',
+                  file=sys.stderr)
+        elif fila[1] != n["boe"]:
+            print(f'[normas] AVISO: {n["id"]} fecha BOE del registro {n["boe"]} ≠ BD {fila[1]}',
+                  file=sys.stderr)
+        _ap.add(n["aprobacion"]); _bo.add(n["boe"])
+        titulo = fila[2] if fila else n["corta"]
+        fechas = (f'Aprobación {_fd(n["aprobacion"])} · BOE {_fd(n["boe"])}'
+                  + (f' · Vigencia {_fd(n["vigencia"])}' if n.get("vigencia") else ""))
+        vot = n.get("votacion") or {}
+        res = ""
+        if n["estado"] == "en_votacion" and vot:
+            res = (f'<div class="mut" style="font-size:.8rem">Votación de convalidación o derogación: '
+                   f'{E(vot.get("organo", ""))}, {_fd(vot.get("fecha", ""))} {E(vot.get("hora", ""))}. '
+                   f'<b>Resultado pendiente.</b> {E(n.get("estado_nota", ""))}</div>')
+        elif n.get("resultado"):
+            res = (f'<div class="mut" style="font-size:.8rem">Resultado registrado: {E(n["resultado"])} '
+                   f'({_fd(n.get("resultado_fecha") or "")}).</div>')
+        _fichas.append(
+            f'<div class="card"><div class="fecha">{E(ESTADO_TXT.get(n["estado"], n["estado"]))} · '
+            f'{E(n["corta"])} · {E(n["ambito"])}</div><div class="tit">{E(titulo)}</div>'
+            f'<div class="mut" style="font-size:.8rem">{E(fechas)}</div>' + res
+            + (f'<div class="mut" style="font-size:.78rem">{E(n["vigencia_nota"])}</div>'
+               if n.get("vigencia_nota") else "")
+            + f'<a class="src" href="https://www.boe.es/buscar/act.php?id={E(n["id"])}"'
+              f' target="_blank" rel="noopener">BOE ↗</a></div>')
+    ficha_html = "".join(_fichas)
+    desenlaces = " · ".join(
+        f'<span class="mut">Si se {E(k)}: {E(v)}.</span>' for k, v in DESENLACE_TXT.items())
+    _ej = " · ".join(f'<a class="src" href="{E(x["url"])}" target="_blank" rel="noopener">'
+                     f'{E(x["etiqueta"])}</a>' for x in MARCO.get("ejemplos", []))
+    marco_html = (f'<p class="mut" style="font-size:.82rem;margin-top:12px">{E(MARCO["descripcion"])} '
+                  f'<a class="src" href="{E(MARCO["url"])}" target="_blank" rel="noopener">art. 86.2 CE ↗</a>. '
+                  f'{E(MARCO["registro"])} {_ej}</p><p class="mut" style="font-size:.82rem">'
+                  f'{E(desenlaces)} El observatorio no anticipa el resultado.</p>')
+    _txt_ap = " y ".join(f"<b>{_fd(a)}</b>" for a in sorted(_ap))
+    _txt_bo = " y ".join(f"<b>{_fd(b)}</b>" for b in sorted(_bo))
 
     # --- exportaciones CSV/JSON (por serie) ---
     datasets = []
@@ -526,9 +603,13 @@ def build():
                    [{"ccaa": k, "viviendas_turisticas": int(v)} for k, v in vut], datasets)
     _write_dataset("boe-vivienda", "Disposiciones generales del BOE sobre vivienda",
                    "BOE · sumario diario (sección I)", "diaria (últimos 21 días)", "BOE — reutilización citando fuente",
-                   ["fecha", "ambito", "departamento", "titulo", "url"],
-                   [{"fecha": f, "ambito": amb, "departamento": dep, "titulo": t, "url": u}
-                    for f, t, u, dep, amb in boe_all], datasets)
+                   ["id", "fecha", "estado", "fecha_aprobacion", "fecha_vigencia",
+                    "ambito", "departamento", "titulo", "url"],
+                   [{"id": i, "fecha": f, "estado": _estado(i),
+                     "fecha_aprobacion": NORMAS.get(i, {}).get("aprobacion", ""),
+                     "fecha_vigencia": NORMAS.get(i, {}).get("vigencia", ""),
+                     "ambito": amb, "departamento": dep, "titulo": t, "url": u}
+                    for i, f, t, u, dep, amb in boe_all], datasets)
     ctrl_rows = []
     for k, tp, tt, src in _IND:
         rv, rp = _vp(b0.get(k)); uv, up = _vp(ind_now.get(k))
@@ -698,7 +779,7 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 
 <h2 id="control">Punto de control · decretos de sep–oct 2026</h2>
 <div class="panel">
-<p style="margin:0 0 12px">Los RDL 26/2026 y 27/2026 se publicaron el <b>29-sep-2026</b>. La <b>referencia</b> es el último dato disponible de cada serie <b>en su propio periodo</b> (no una fecha de corte): precios (IPV/IPVA), lanzamientos (CGPJ), ejecuciones (INE) y viviendas turísticas (VUT).</p>
+<p style="margin:0 0 12px">Los RDL 26/2026 y 27/2026 fueron aprobados el {_txt_ap} y publicados en el BOE el {_txt_bo}. La <b>referencia</b> es el último dato disponible de cada serie <b>en su propio periodo</b> (no una fecha de corte): precios (IPV/IPVA), lanzamientos (CGPJ), ejecuciones (INE) y viviendas turísticas (VUT).</p>
 <table><thead><tr><th>Indicador</th><th class="num">Referencia · valor · periodo</th><th class="num">Último dato · valor · periodo</th><th class="num">Δ</th><th>Fuente</th></tr></thead><tbody>{filas_control}</tbody></table>
 <p class="mut" style="font-size:.8rem">⚠️ <b>Ninguna serie publicada mide todavía el periodo posterior a los decretos.</b> Los hitos de <b>16-oct-2026 (CGPJ 2T) y 14-dic-2026 (CGPJ 3T)</b> describen periodos <b>anteriores</b> a los RDL; la primera lectura posterior (4T-2026) llegará en <b>~feb-2027</b>. Cada dato nuevo se compara con esta referencia.</p>{_descarga("punto-control")}</div>
 
@@ -708,8 +789,8 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 <h2 id="calendario">Calendario de publicaciones</h2>
 <div class="panel">{cal}</div>
 
-<h2 id="medidas">Registro de medidas (BOE)</h2>
-<div class="panel">{filas_med}<div class="grid" style="margin-top:12px">{boe_html}</div>{_descarga("boe-vivienda")}</div>
+<h2 id="medidas">Normas registradas (BOE)</h2>
+<div class="panel"><p class="mut" style="margin:0 0 12px;font-size:.85rem">Estado y fechas de cada norma registrada, con <b>aprobación</b>, <b>publicación</b> y <b>vigencia</b> por separado. El estado se actualiza solo con fuente oficial; mientras no exista Resolución del Congreso, figura como pendiente.</p><p class="mut" style="margin:0 0 4px;font-size:.85rem"><b>Hitos</b> (fecha de aprobación):</p>{filas_med}<div class="grid" style="margin-top:12px">{ficha_html}</div>{marco_html}<p class="mut" style="margin:18px 0 8px;font-size:.85rem"><b>Otras disposiciones</b> del BOE (sección I) sobre vivienda, de los últimos 21 días.</p><div class="grid">{boe_html}</div>{_descarga("boe-vivienda")}</div>
 
 <h2 id="metodo">Método y límites</h2>
 <div class="panel"><ul>
