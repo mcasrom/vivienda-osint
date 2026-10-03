@@ -50,6 +50,9 @@ verificar.
 
 ## Qué publica (datos abiertos, CSV + JSON)
 
+Además del catálogo, la portada incluye secciones de contexto regulatorio: **normas del BOE** (ficha por norma, con estado y fechas) y **zonas de mercado residencial tensionado** (Ley 12/2023 art. 18: CCAA que las han declarado, con fuente BOE/MIVAU).
+
+
 | Serie | Qué mide | Fuente | Periocidad |
 |---|---|---|---|
 | `precios-ipv` | Precio de compraventa (IPV), variación anual | INE · tabla 80270 | trimestral |
