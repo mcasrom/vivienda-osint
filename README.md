@@ -58,6 +58,7 @@ Además del catálogo, la portada incluye secciones de contexto regulatorio: **n
 | `precios-ipv` | Precio de compraventa (IPV), variación anual | INE · tabla 80270 | trimestral |
 | `alquiler-ipva` | Índice de precios del alquiler | INE · tabla 59056 | anual |
 | `alquiler-serpavi` | Alquiler de referencia por municipio (contratos/fianzas) | MIVAU · SERPAVI (VDP001) | 2024 |
+| `esfuerzo-alquiler-municipio` | Esfuerzo de acceso: renta del hogar × alquiler SERPAVI (piso 80 m²) | INE (ADRH) × MIVAU (SERPAVI) | 2023–2024 |
 | `ejecuciones-hipotecarias-ccaa` · `-nacional` | Ejecuciones hipotecarias iniciadas | INE · tabla 10740 | anual |
 | `compraventas-ccaa` · `-nacional` | Compraventas de vivienda inscritas | INE · ETDP (tabla 49280) | anual |
 | `hipotecas-nacional` | Hipotecas constituidas de vivienda | INE · HPT (tabla 3200) | mensual |
@@ -106,7 +107,12 @@ web/             salida (ignorada en git, regenerada por el build)
 ### Fuentes de datos
 - **INE** — webservice `wstempus` (datos abiertos): tablas 80270 (IPV), 59056 (IPVA),
   10740 (ejecuciones), 46141 (viviendas turísticas).
-- **CGPJ** — lanzamientos por CCAA y cronología nacional.
+- **INE · Atlas de Distribución de Renta de los Hogares (ADRH)** — renta neta media por
+  hogar y por persona, por municipio (descarga CSV por tabla; el mapa provincia→tabla se
+  cachea en `data/adrh_tablas.json`). Es dato **anual**: se ingiere aparte
+  (`venv/bin/python -m ingest.renta`), no en el cron diario.
+- **MIVAU · SERPAVI** — alquiler de referencia por municipio (mediana de contratos/fianzas).
+- **CGPJ** — lanzamientos por CCAA, cronología nacional y **desglose por causa**.
 - **BOE** — sumario diario (sección I), de donde también se leen los títulos oficiales
   completos de cada norma (no se duplican en el repo).
 

@@ -9,7 +9,7 @@ from datetime import date
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from ingest import boe as boeing, via, ine, cgpj, territorios, frescura, ipc, serpavi  # noqa: E402
+from ingest import boe as boeing, via, ine, cgpj, territorios, frescura, ipc, serpavi, renta  # noqa: E402
 
 # Directorio de salida: por defecto web/ (público); el cron/publicar por staging
 # usa web_tmp/ y solo intercambia si el contrato de datos pasa (regla: publicar
@@ -919,6 +919,24 @@ def build():
 
     _serp_top_rows = _serp_rows(serpavi.top(12))
     _serp_bot_rows = _serp_rows(serpavi.bottom(12))
+    # esfuerzo de acceso: renta por hogar (INE ADRH) × alquiler SERPAVI (por código INE)
+    _ef = renta.cruce_serpavi()
+    _ef_per = _ef[0][3] if _ef else "—"
+    _ef_n = len(_ef)
+
+    def _ef_rows(_rows):
+        _out = []
+        for _cod, _mun, _prov, _per, _rh, _eur, _an, _alq, _esf in _rows:
+            _rhs = f"{_rh:,.0f}".replace(",", ".")
+            _eurs = f"{_eur:.2f}".replace(".", ",")
+            _esfs = f"{_esf:.1f}".replace(".", ",")
+            _out.append(f'<tr><td>{E(_mun)} <span class="mut">{E(_prov)}</span></td>'
+                        f'<td class="num">{_rhs} €</td><td class="num">{_eurs} €/m²</td>'
+                        f'<td class="num"><b>{_esfs} %</b></td></tr>')
+        return "".join(_out)
+
+    _ef_top = _ef_rows(_ef[:12])
+    _ef_bot = _ef_rows(list(reversed(_ef[-12:])))
     ipva_s = ine.serie("ipva_var_anual")
     ipva_var = ipva_s[-1][1] if ipva_s else None
     tend_ia, _ = _tendencia(ipva_s)
@@ -1248,6 +1266,16 @@ def build():
                        ["codigo_ine", "municipio", "provincia", "eur_m2", "p25", "p75", "anio"],
                        [{"codigo_ine": r[0], "municipio": r[1], "provincia": r[2], "eur_m2": r[3],
                          "p25": r[4], "p75": r[5], "anio": r[6]} for r in _serp_all], datasets)
+        if _ef:
+            _write_dataset("esfuerzo-alquiler-municipio", "Esfuerzo de acceso al alquiler por municipio (renta × SERPAVI)",
+                           "INE (ADRH, renta) × MIVAU (SERPAVI, alquiler)", f"{_ef_per} / {_serp_anio}",
+                           "INE/MIVAU — reutilización citando fuente",
+                           ["codigo_ine", "municipio", "provincia", "periodo_renta", "renta_hogar",
+                            "eur_m2", "anio_serpavi", "alquiler_80m2_mes", "esfuerzo_pct"],
+                           [{"codigo_ine": c, "municipio": m, "provincia": p, "periodo_renta": per,
+                             "renta_hogar": rh, "eur_m2": e, "anio_serpavi": a,
+                             "alquiler_80m2_mes": al, "esfuerzo_pct": es}
+                            for c, m, p, per, rh, e, a, al, es in _ef], datasets)
     with open(os.path.join(DATA_DIR, "index.json"), "w", encoding="utf-8") as f:
         json.dump({"observatorio": "Observatorio de la vivienda",
                    "url": "https://vivienda.pruebapublica.com/", "generado": hoy, "series": datasets},
@@ -1511,6 +1539,15 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 <div><p class="mut" style="font-size:.8rem;margin:0 0 4px"><b>Más baratos</b> (€/m²/mes)</p><table><tbody>{_serp_bot_rows}</tbody></table></div>
 </div>
 <p class="mut" style="font-size:.78rem;margin:10px 0 0">⚠️ Es la mediana de <b>todos</b> los contratos (incluidos los antiguos con renta congelada), así que suele ser <b>más baja</b> que el precio de un contrato nuevo. El CSV oficial es agregado y <b>no publica el nº de contratos (n)</b> por municipio; MIVAU solo incluye municipios con datos suficientes. No se mezcla con precio de oferta.</p>{_descarga("alquiler-serpavi")}</div>
+
+<h2 id="esfuerzo">Esfuerzo de acceso al alquiler <span>· INE (renta) × SERPAVI</span></h2>
+<div class="panel">
+<p style="font-size:.85rem;margin:0 0 10px">Cruce de la <b>renta neta media por hogar</b> (INE, Atlas de distribución de renta, <b>{E(str(_ef_per))}</b>) con el <b>alquiler de referencia</b> por municipio (SERPAVI/MIVAU, {E(str(_serp_anio))}). El <b>esfuerzo</b> estima el alquiler de un <b>piso de 80 m²</b> (€/m²/mes × 80 × 12) como <b>% de la renta anual del hogar</b>. {_ef_n} municipios con ambos datos.</p>
+<div class="grid">
+<div><p class="mut" style="font-size:.8rem;margin:0 0 4px"><b>Más esfuerzo</b></p><table><thead><tr><th>Municipio</th><th class="num">Renta hogar</th><th class="num">€/m²</th><th class="num">Esfuerzo</th></tr></thead><tbody>{_ef_top}</tbody></table></div>
+<div><p class="mut" style="font-size:.8rem;margin:0 0 4px"><b>Menos esfuerzo</b></p><table><thead><tr><th>Municipio</th><th class="num">Renta hogar</th><th class="num">€/m²</th><th class="num">Esfuerzo</th></tr></thead><tbody>{_ef_bot}</tbody></table></div>
+</div>
+<p class="mut" style="font-size:.78rem;margin:10px 0 0">⚠️ <b>Estimación descriptiva, no un ranking</b>: supone un piso de 80 m² a precio de mercado y contrato nuevo; SERPAVI es la mediana de <b>todos</b> los contratos (incluye rentas antiguas → suelo) y la renta es de {E(str(_ef_per))} frente al alquiler de {E(str(_serp_anio))}. No es causal ni predictivo. Fuentes: INE (ADRH) y MIVAU (SERPAVI).</p>{_descarga("esfuerzo-alquiler-municipio")}</div>
 
 <h2 id="inflacion">Inflación residencial <span>· IPC (INE, base 2025)</span></h2>
 <div class="panel">

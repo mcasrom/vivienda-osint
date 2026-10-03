@@ -1,5 +1,13 @@
 # Registro de cambios · vivienda-osint
 
+## [Sin publicar] — 2026-10-03
+- **Esfuerzo de acceso al alquiler por municipio** (`esfuerzo-alquiler-municipio`): cruce de la
+  **renta neta media por hogar** (INE · **ADRH**, 2023, por código INE) con el **alquiler de
+  referencia** (MIVAU · **SERPAVI**, 2024). Nueva fuente `ingest/renta.py` (mapa provincia→tabla
+  cacheado en `data/adrh_tablas.json`); datos anuales, fuera del cron diario. Bloque nuevo en la
+  portada y dataset; `test_datos` **§27** (cobertura ≥100 municipios y rangos plausibles). Es una
+  **estimación descriptiva** (piso de 80 m², contrato nuevo), no un ranking.
+
 ## [0.1.1] — 2026-10-03
 - **`status.json` público** (`web/data/status.json`): estado operativo por fuente — última OK,
   último intento, `edad_dias`, nº de **filas** y `sha256` de su serie. Amplía el bloque «Estado

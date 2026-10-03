@@ -580,6 +580,35 @@ if _SERIES:
         elif _z > 3.5 and _d[-1] > _floor:
             print(f"test_datos: AVISO {_nom}: salto atípico {_d[-1]:.1f} (z={_z:.1f}) — revisar")
 
+# ---------------------------------------------------------------------------
+# 27. esfuerzo de acceso (renta INE ADRH × SERPAVI): rango y cobertura
+# ---------------------------------------------------------------------------
+_efn = None
+try:
+    _ce = sqlite3.connect(f"file:{DB_P}?mode=ro", uri=True)
+    _efn = _ce.execute("SELECT COUNT(*) FROM renta_municipio").fetchone()[0]
+    _rentas = [r[0] for r in _ce.execute(
+        "SELECT renta_hogar FROM renta_municipio WHERE renta_hogar IS NOT NULL")]
+except sqlite3.OperationalError:
+    _efn = None
+if not _efn:
+    OMITIDO.append("renta_municipio (sin tabla/datos)")
+else:
+    check(_efn >= 1000, f"renta_municipio con muy pocos municipios: {_efn}")
+    if _rentas:
+        check(min(_rentas) > 5000 and max(_rentas) < 120000,
+              f"renta por hogar fuera de rango plausible [{min(_rentas):.0f}, {max(_rentas):.0f}]")
+    _efp = os.path.join(WEB, "data", "esfuerzo-alquiler-municipio.json")
+    if os.path.isdir(os.path.join(WEB, "data")):
+        check(os.path.exists(_efp), "falta el dataset esfuerzo-alquiler-municipio.json")
+        if os.path.exists(_efp):
+            _dd = json.load(open(_efp, encoding="utf-8")).get("datos", [])
+            _esfs = [x["esfuerzo_pct"] for x in _dd if x.get("esfuerzo_pct") is not None]
+            check(len(_esfs) >= 100, f"esfuerzo con pocos municipios cruzados: {len(_esfs)}")
+            if _esfs:
+                check(min(_esfs) > 3 and max(_esfs) < 90,
+                      f"esfuerzo fuera de rango plausible [{min(_esfs)}, {max(_esfs)}]")
+
 if FALLOS:
     print(f"FALLOS ({len(FALLOS)}):", file=sys.stderr)
     for f in FALLOS:
