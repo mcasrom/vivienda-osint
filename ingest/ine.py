@@ -215,6 +215,38 @@ def cv_nacional():
         return []
 
 
+def ingest_hpt() -> int:
+    """HPT (tabla 3200): hipotecas constituidas sobre viviendas, nacional mensual."""
+    c = _con()
+    c.execute("DELETE FROM ine_serie WHERE serie='hpt:viviendas'")
+    n = 0
+    for s in _get("https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA/3200?nult=16&tip=M"):
+        nom = s.get("Nombre", "")
+        if not (nom.startswith("Viviendas. Número de hipotecas. Total Nacional") and "Base nueva" in nom):
+            continue
+        for x in s.get("Data", []):
+            if x.get("Valor") is None or x.get("Anyo") is None or x.get("FK_Periodo") is None:
+                continue
+            p = int(x.get("FK_Periodo"))
+            if not (1 <= p <= 12):
+                continue
+            fecha = f"{x.get('Anyo')}-{p:02d}-01"
+            n += c.execute("INSERT OR REPLACE INTO ine_serie VALUES(?,?,?,?)",
+                           ("hpt:viviendas", fecha, "hipotecas viviendas", float(x["Valor"]))).rowcount
+    c.commit()
+    return n
+
+
+def hpt_serie():
+    """[(etiqueta, valor)] de hipotecas constituidas sobre viviendas (nacional, mensual)."""
+    try:
+        c = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
+        return c.execute("SELECT substr(fecha,1,7), valor FROM ine_serie WHERE serie='hpt:viviendas' "
+                         "ORDER BY fecha").fetchall()
+    except Exception:
+        return []
+
+
 def eh_nacional():
     """[(año, valor)] de la serie nacional de ejecuciones hipotecarias."""
     try:
@@ -238,4 +270,4 @@ def ultimo(nombre: str):
 
 
 if __name__ == "__main__":
-    print(f"[ine] puntos actualizados: {ingest()} · EH: {ingest_eh()} · VTE: {ingest_vte()} · CV: {ingest_etdp()}")
+    print(f"[ine] puntos actualizados: {ingest()} · EH: {ingest_eh()} · VTE: {ingest_vte()} · CV: {ingest_etdp()} · HPT: {ingest_hpt()}")

@@ -374,6 +374,22 @@ if _cv is not None and os.path.exists(_pcv):
 else:
     OMITIDO.append("compraventas (nacional/CCAA) para el contrato de suma")
 
+# ---------------------------------------------------------------------------
+# 17. Hipotecas constituidas de vivienda (HPT)
+# ---------------------------------------------------------------------------
+p_hpt = os.path.join(WEB, "data", "hipotecas-nacional.csv")
+if not os.path.exists(p_hpt):
+    OMITIDO.append("web/data/hipotecas-nacional.csv (generado; requiere ingest_hpt)")
+else:
+    with open(p_hpt, encoding="utf-8") as fh:
+        _hpt = list(csv.DictReader(fh))
+    check(len(_hpt) >= 6, f"hipotecas-nacional.csv: solo {len(_hpt)} filas")
+    _hv = [float(r["hipotecas"]) for r in _hpt if r.get("hipotecas")]
+    check(bool(_hv) and 1000 < max(_hv) < 200000,
+          f"hipotecas-nacional.csv: valor fuera de rango plausible: {_hv and max(_hv)}")
+    if os.path.exists(html_p):
+        check('id="hipotecas"' in page, "la portada no incluye la sección de hipotecas constituidas")
+
 if FALLOS:
     print(f"FALLOS ({len(FALLOS)}):", file=sys.stderr)
     for f in FALLOS:

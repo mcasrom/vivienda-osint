@@ -568,6 +568,10 @@ def build():
     cv_serie = ine.cv_nacional()
     per_cv = cv_fecha or "—"
     cv_tot_txt = f"{int(cv_total):,}".replace(",", ".") if cv_total else "—"
+    hpt = ine.hpt_serie()
+    hpt_ult = hpt[-1][1] if hpt else None
+    per_hpt = hpt[-1][0] if hpt else "—"
+    hpt_tot_txt = f"{int(hpt_ult):,}".replace(",", ".") if hpt_ult is not None else "—"
     vut, vut_anyo, vut_total, vut_pct = ine.vte_ccaa()
     vut_tot_txt = f"{int(vut_total):,}".replace(",", ".") if vut_total else "—"
     # tasas por 1.000 viviendas (denominador = total de viviendas censadas,
@@ -828,6 +832,9 @@ def build():
                    "anual", "INE — reutilización citando fuente",
                    ["periodo", "compraventas"],
                    [{"periodo": p, "compraventas": int(v)} for p, v in cv_serie], datasets)
+    _write_dataset("hipotecas-nacional", "Hipotecas constituidas de vivienda (nacional)", "INE · HPT (tabla 3200)",
+                   "mensual", "INE — reutilización citando fuente",
+                   ["periodo", "hipotecas"], [{"periodo": p, "hipotecas": int(v)} for p, v in hpt], datasets)
     _write_dataset("lanzamientos-ccaa", "Lanzamientos (desahucios) por CCAA", "CGPJ · Efecto de la crisis",
                    per_lz, "CGPJ — datos judiciales públicos",
                    ["ccaa", "lanzamientos"], [{"ccaa": k, "lanzamientos": int(v)} for k, v in lz], datasets)
@@ -1042,6 +1049,11 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 {svg_line([(str(a), v) for a, v in eh_nac], color="#0f766e", fmt=lambda v: f"{int(v):,}".replace(",", "."))}
 <p class="mut" style="font-size:.8rem">Ejecuciones hipotecarias <b>iniciadas sobre vivienda</b>, por CCAA. <b>Total nacional {eh_tot_txt}</b>. Fuente: <a href="https://www.ine.es/">INE</a>.</p>
 <p class="mut" style="font-size:.8rem">Nota: los <b>lanzamientos (desahucios)</b> los publica el <b>CGPJ</b> (trimestral; próximo 16-oct-2026).</p>{_descarga("ejecuciones-hipotecarias-ccaa")}</div>
+
+<h2 id="hipotecas">Hipotecas constituidas de vivienda <span>· INE{f" · {per_hpt}" if hpt else ""}</span></h2>
+<div class="panel">
+{svg_line(hpt, color="#0f766e", fmt=lambda v: f"{int(v):,}".replace(",", "."))}
+<p class="mut" style="font-size:.8rem">Hipotecas constituidas sobre <b>viviendas</b> (nacional, mensual). Último dato {E(per_hpt)}: <b>{hpt_tot_txt}</b>. Fuente: <a href="https://www.ine.es/">INE</a> (Estadística de Hipotecas).</p>{_descarga("hipotecas-nacional")}</div>
 
 <h2 id="compraventas">Compraventas de vivienda por CCAA <span>· ETDP (INE){f" · {per_cv}" if cv_fecha else ""}</span></h2>
 <div class="panel">
