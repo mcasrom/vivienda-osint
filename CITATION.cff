@@ -20,6 +20,11 @@ repository-code: "https://github.com/mcasrom/vivienda-osint"
 url: "https://vivienda.pruebapublica.com"
 version: "0.1.1"
 date-released: "2026-10-03"
+doi: 10.5281/zenodo.23125927
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.23125926
+    description: "DOI de concepto (resuelve siempre a la última versión)"
 keywords:
   - vivienda
   - España
@@ -32,4 +37,3 @@ keywords:
   - alquiler
   - IPV
   - lanzamientos
-# doi: 10.5281/zenodo.XXXXXXX   # añadir tras publicar un release en Zenodo (ver README §Citar)

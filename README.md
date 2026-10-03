@@ -177,11 +177,10 @@ sale mal, se oye (el fallo va a `logs/` y no solo se ignora).
 
 ## Citar
 
-- **Ficha de cita**: [`CITATION.cff`](CITATION.cff) (CFF 1.2.0).
-- **DOI (Zenodo)**: pendiente. Para emitirlo: en Zenodo → *Settings → GitHub*, activar el
-  repositorio `mcasrom/vivienda-osint` y publicar un *release* (p. ej. `v0.1.0`); Zenodo
-  acuña un DOI por versión. Luego se añade el DOI a `CITATION.cff` (línea comentada) y a la
-  tabla del README.
+- **DOI (siempre la última versión)**: [10.5281/zenodo.23125926](https://doi.org/10.5281/zenodo.23125926)
+- **DOI de esta versión (0.1.1)**: [10.5281/zenodo.23125927](https://doi.org/10.5281/zenodo.23125927)
+- **Ficha de cita**: [`CITATION.cff`](CITATION.cff) (CFF 1.2.0) — repositorio archivado en **Zenodo**
+  (CERN): cada release de GitHub genera un snapshot con DOI.
 
 ## Licencia
 

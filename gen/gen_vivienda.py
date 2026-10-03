@@ -1409,6 +1409,8 @@ def build():
 "description":"Datos oficiales de vivienda en España: evolución de precios de compraventa y del alquiler (INE), ejecuciones hipotecarias y lanzamientos por CCAA (INE/CGPJ), viviendas turísticas (INE) y registro de disposiciones sobre vivienda (BOE).",
 "url":"https://vivienda.pruebapublica.com/","creator":{{"@type":"Organization","name":"pruebapublica.com"}},
 "license":"https://creativecommons.org/licenses/by/4.0/","isAccessibleForFree":true,
+"identifier":{{"@type":"PropertyValue","propertyID":"DOI","value":"10.5281/zenodo.23125926"}},
+"sameAs":"https://doi.org/10.5281/zenodo.23125926",
 "distribution":{distrib_json},
 "keywords":["vivienda","alquiler","desahucios","lanzamientos","INE","CGPJ","BOE","España"]}}
 </script>
