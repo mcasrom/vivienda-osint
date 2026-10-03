@@ -27,6 +27,7 @@ else
 fi
 $PY tests/test_watchdog_rdl.py || fail=1
 $PY tests/test_territorios.py || fail=1
+$PY scripts/audit_derivados.py || fail=1
 rm -rf web_ci
 
 if [ "$fail" -eq 0 ]; then
