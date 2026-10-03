@@ -1,9 +1,12 @@
 name: tests
 
+# CI de GitHub DESHABILITADA a nivel de cuenta (los runs dan "No jobs were run").
+# El gate REAL es el hook local `scripts/pre-push` (corre la suite en el server
+# antes de cada push) + la puerta de staging del cron (`regen_publicar.sh`).
+# Este workflow queda solo como manual (workflow_dispatch) hasta que se habilite
+# Actions/billing en la cuenta.
 on:
-  push:
-    branches: [master]
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   test:
