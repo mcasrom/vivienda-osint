@@ -409,6 +409,22 @@ _pch = os.path.join(WEB, "data", "changelog.json")
 if not os.path.exists(_pch):
     OMITIDO.append("web/data/changelog.json (lo escribe regen_publicar.sh)")
 
+# ---------------------------------------------------------------------------
+# 19. Zonas de mercado residencial tensionado (Ley 12/2023): fichero + sección
+# ---------------------------------------------------------------------------
+_zmf = os.path.join(ROOT, "data", "zmrt.json")
+if not os.path.exists(_zmf):
+    OMITIDO.append("data/zmrt.json (curado)")
+else:
+    try:
+        _zm = json.load(open(_zmf, encoding="utf-8"))
+        check(bool(_zm.get("declarantes_acumulado")), "zmrt.json: sin 'declarantes_acumulado'")
+        check(bool(_zm.get("ultima_resolucion", {}).get("url")), "zmrt.json: sin resolución BOE enlazada")
+    except ValueError as _e:
+        FALLOS.append(f"zmrt.json no es JSON válido: {_e}")
+    if os.path.exists(html_p):
+        check('id="zmrt"' in page, "la portada no incluye la sección de zonas tensionadas")
+
 if FALLOS:
     print(f"FALLOS ({len(FALLOS)}):", file=sys.stderr)
     for f in FALLOS:

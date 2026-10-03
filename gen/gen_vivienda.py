@@ -34,6 +34,13 @@ with open(NORMAS_F, encoding="utf-8") as _fh:
 NORMAS = {n["id"]: n for n in _REGN["normas"]}
 MED_IDS = set(NORMAS)
 MARCO = _REGN["marco"]
+# Zonas de mercado residencial tensionado (Ley 12/2023, art. 18): fichero curado
+ZMRT_F = os.path.join(ROOT, "data", "zmrt.json")
+try:
+    with open(ZMRT_F, encoding="utf-8") as _fh:
+        ZMRT = json.load(_fh)
+except (OSError, ValueError):
+    ZMRT = {}
 ESTADO_TXT = {
     "publicada": "Publicada",
     "en_votacion": "Pendiente de convalidación o derogación",
@@ -802,6 +809,17 @@ def build():
                   f'{desenlaces} El observatorio no anticipa el resultado.</p>')
     _txt_ap = " y ".join(f"<b>{_fd(a)}</b>" for a in sorted(_ap))
     _txt_bo = " y ".join(f"<b>{_fd(b)}</b>" for b in sorted(_bo))
+    # ZMRT (Ley 12/2023, art. 18)
+    _zm = ZMRT or {}
+    _zm_decl = ", ".join(_zm.get("declarantes_acumulado", [])) or "—"
+    _zm_nuevas = "".join(
+        f'<li><b>{E(x["ccaa"])}</b>: {E(x["zonas"])}</li>'
+        for x in _zm.get("nuevas_ultimo_trimestre", []))
+    _zm_res = _zm.get("ultima_resolucion") or {}
+    _zm_src = (f'<a href="{E(_zm_res.get("url", ""))}" target="_blank" rel="noopener">'
+               f'{E(_zm_res.get("boe", ""))} ({E(_zm_res.get("trimestre", ""))}) ↗</a>'
+               if _zm_res.get("url") else "del BOE")
+    _zm_mivau = _zm.get("acumulado_mivau", "")
 
     # --- exportaciones CSV/JSON (por serie) ---
     datasets = []
@@ -1133,6 +1151,13 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 
 <h2 id="medidas">Normas registradas (BOE)</h2>
 <div class="panel"><p class="mut" style="margin:0 0 12px;font-size:.85rem">Estado y fechas de cada norma registrada, con <b>aprobación</b>, <b>publicación</b> y <b>vigencia</b> por separado. El estado se actualiza solo con fuente oficial: la <b>Resolución del Congreso</b> —cuando se publica— sustituye a «pendiente» por el acuerdo real (convalidación o derogación).</p><p class="mut" style="margin:0 0 4px;font-size:.85rem"><b>Hitos</b> (fecha de aprobación):</p>{filas_med}<div class="grid" style="margin-top:12px">{ficha_html}</div>{marco_html}<p class="mut" style="margin:18px 0 8px;font-size:.85rem"><b>Otras disposiciones</b> del BOE (sección I) sobre vivienda, de los últimos 21 días.</p><div class="grid">{boe_html}</div>{_descarga("boe-vivienda")}</div>
+
+<h2 id="zmrt">Zonas de mercado residencial tensionado <span>· Ley 12/2023, art. 18</span></h2>
+<div class="panel">
+<p style="font-size:.85rem;margin:0 0 10px">Una <b>ZMRT</b> la declara <b>cada comunidad autónoma</b> (habilita la contención de rentas de la Ley 12/2023). El Ministerio publica la relación <b>cada trimestre</b> en el BOE; no es una figura estatal única ni automática.</p>
+<p style="font-size:.85rem;margin:0 0 6px"><b>CCAA que han declarado zonas</b> (acumulado): {_zm_decl}.</p>
+{('<p style="font-size:.85rem;margin:0 0 4px"><b>Nuevas del último trimestre publicado</b>:</p><ul style="font-size:.85rem;margin:0 0 6px">' + _zm_nuevas + "</ul>") if _zm_nuevas else ""}
+<p class="mut" style="font-size:.78rem;margin:8px 0 0">No se replica aquí la lista completa de municipios (es extensa y puede quedar desfasada): el dato oficial es la resolución {_zm_src} y el <a href="{E(_zm_mivau)}" target="_blank" rel="noopener">listado acumulado del MIVAU ↗</a>. Solo figuran las CCAA que han declarado; las demás, no constan.</p></div>
 
 <h2 id="metodo">Método y límites</h2>
 <div class="panel"><ul>
