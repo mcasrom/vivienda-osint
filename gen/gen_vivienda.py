@@ -253,9 +253,13 @@ table{width:100%;border-collapse:collapse;font-size:.88rem} th{text-align:left;p
 code{background:#f1f5f9;padding:1px 4px;border-radius:4px}
 .box{margin:12px 0;padding:12px 16px;background:#fffbeb;border-left:4px solid #d97706;border-radius:6px;font-size:.88rem}
 footer{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;color:var(--mut)} footer a{color:var(--accent)}
-.share{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:.82rem;margin-top:14px}
-.share a,.share button{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink);text-decoration:none;font-size:.8rem;font-weight:600;cursor:pointer;font-family:inherit}
-.share a:hover,.share button:hover{border-color:var(--accent);color:var(--accent)}
+.navshare{position:relative;color:#fff}
+.navshare>summary{list-style:none;cursor:pointer;opacity:.9;font-weight:600}
+.navshare>summary::-webkit-details-marker{display:none}
+.navshare[open]>summary{opacity:1}
+.navshare .menu{position:absolute;right:0;top:135%;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:6px;min-width:168px;box-shadow:0 10px 28px rgba(15,23,42,.22);z-index:30}
+.navshare .menu a,.navshare .menu button{display:block;padding:7px 12px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);text-decoration:none;font-size:.82rem;font-weight:600;cursor:pointer;text-align:left;font-family:inherit}
+.navshare .menu a:hover,.navshare .menu button:hover{background:#f1f5f9;border-color:var(--accent);color:var(--accent)}
 """
 
 
@@ -267,7 +271,8 @@ def _shell(titulo, desc, canonical, h1, intro, body, active=""):
            + na("/", "Observatorio") + na("/fuentes.html", "Fuentes") + na("/propiedad.html", "Propiedad")
            + na("/datos.html", "Datos")
            + na("/mapa.html", "Mapa")
-           + '<a href="https://pruebapublica.com" style="opacity:.7">pruebapublica.com</a></div></nav>')
+           + '<a href="https://pruebapublica.com" style="opacity:.7">pruebapublica.com</a>'
+           + _navshare(canonical, titulo) + '</div></nav>')
     return f"""<!doctype html><html lang="es"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{E(titulo)}</title><meta name="description" content="{E(desc)}">
@@ -585,21 +590,20 @@ def _slug(s):
     return _re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")
 
 
-def _share(url, texto):
+def _navshare(url, texto):
     from urllib.parse import quote
     t = quote(texto)
     u = quote(url, safe="")
     tu = quote(texto + " " + url)
     return (
-        '<div class="share"><span class="mut">Compartir:</span>'
-        f'<a href="https://x.com/intent/post?text={t}&url={u}" target="_blank" rel="noopener" '
-        f'aria-label="Compartir en X">X</a>'
+        '<details class="navshare"><summary>Compartir ▾</summary><div class="menu">'
+        f'<a href="https://x.com/intent/post?text={t}&url={u}" target="_blank" rel="noopener">X</a>'
         f'<a href="https://mastodon.social/share?text={tu}" target="_blank" rel="noopener">Mastodon</a>'
         f'<a href="https://bsky.app/intent/compose?text={tu}" target="_blank" rel="noopener">Bluesky</a>'
         f'<button type="button" data-url="{E(url)}" onclick="var b=this;'
         f'navigator.clipboard&amp;&amp;navigator.clipboard.writeText(b.dataset.url).then(function()'
         f'{{b.textContent=\'Copiado ✓\'}})">Copiar enlace</button>'
-        '</div>')
+        '</div></details>')
 
 
 def _perfil_svg(nom, d, all_d):
@@ -672,9 +676,7 @@ def _ccaa_page(nom, d, all_d):
             f'<tbody>{filas}</tbody></table>'
             f'<p class="mut" style="font-size:.78rem;margin:10px 0 0">Datos oficiales. Las tasas usan como denominador '
             f'el total de viviendas (derivado del % VUT del INE). Ver <a href="/metodo.html">método</a> y '
-            f'<a href="/">panel general</a>.</p>'
-            f'{_share(f"https://vivienda.pruebapublica.com/ccaa/{_slug(nom)}.html", f"Datos oficiales de vivienda de {nom} (INE, CGPJ, MIVAU), con fuente y periodo.")}'
-            f'</div>'
+            f'<a href="/">panel general</a>.</p></div>'
             f'<h2>Suplemento gráfico <span>· {E(nom)} frente a las CCAA</span></h2><div class="panel">'
             f'{_perfil_svg(nom, d, all_d)}'
             f'<p class="mut" style="font-size:.78rem;margin:10px 0 0">Cada fila sitúa a {E(nom)} (punto verde) '
@@ -1311,7 +1313,7 @@ def build():
 
     _ccaa_links = " · ".join(f'<a href="/ccaa/{_slug(_n)}.html">{E(_n)}</a>'
                              for _c, _n in territorios.NOMBRE.items())
-    _share_home = _share(
+    _navshare_home = _navshare(
         "https://vivienda.pruebapublica.com/",
         "Datos oficiales de vivienda en España, con fuente y periodo: precio, compraventas, "
         "alquiler, lanzamientos, ejecuciones y viviendas turísticas.")
@@ -1366,18 +1368,21 @@ table{{width:100%;border-collapse:collapse;font-size:.88rem}} th{{text-align:lef
 .m{{padding:7px 0;border-bottom:1px solid var(--line);font-size:.88rem}} .m .d{{display:inline-block;min-width:96px;color:var(--mut);font-variant-numeric:tabular-nums}} .m .src{{color:var(--accent);text-decoration:none;font-size:.78rem}}
 footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;color:var(--mut)}} footer a{{color:var(--accent)}}
 @media(max-width:820px){{.inds{{grid-template-columns:repeat(2,1fr)}} .grid{{grid-template-columns:1fr}}}}
-.share{{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:.82rem}}
-.share a,.share button{{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink);text-decoration:none;font-size:.8rem;font-weight:600;cursor:pointer;font-family:inherit}}
-.share a:hover,.share button:hover{{border-color:var(--accent);color:var(--accent)}}
+.navshare{{position:relative;color:#fff}}
+.navshare>summary{{list-style:none;cursor:pointer;opacity:.9;font-weight:600}}
+.navshare>summary::-webkit-details-marker{{display:none}}
+.navshare[open]>summary{{opacity:1}}
+.navshare .menu{{position:absolute;right:0;top:135%;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:6px;min-width:168px;box-shadow:0 10px 28px rgba(15,23,42,.22);z-index:30}}
+.navshare .menu a,.navshare .menu button{{display:block;padding:7px 12px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);text-decoration:none;font-size:.82rem;font-weight:600;cursor:pointer;text-align:left;font-family:inherit}}
+.navshare .menu a:hover,.navshare .menu button:hover{{background:#f1f5f9;border-color:var(--accent);color:var(--accent)}}
 </style></head><body>
 <nav class="nav"><div class="in"><b>🏠 Observatorio de la vivienda</b>
 <a href="#indicadores">Indicadores</a><a href="#inflacion">Inflación</a><a href="#comparador">Comparador</a><a href="#dicen">Se dice</a><a href="#calendario">Calendario</a><a href="#medidas">Medidas</a><a href="#zmrt">Zonas</a><a href="#metodo">Método</a><a href="#apoyar">Apoyar</a><a href="/fuentes.html">Fuentes</a><a href="/propiedad.html">Propiedad</a><a href="/datos.html">Datos</a><a href="/mapa.html">Mapa</a><a href="/ccaa/">CCAA</a>
-<a href="https://pruebapublica.com" style="opacity:.7">pruebapublica.com</a></div></nav>
+<a href="https://pruebapublica.com" style="opacity:.7">pruebapublica.com</a>{_navshare_home}</div></nav>
 <header class="hero"><div class="wrap">
 <h1>Qué dicen los datos oficiales de vivienda, sin puntuaciones ni atribuciones</h1>
 <p>Cada cifra lleva su unidad, su fuente y su fecha. Las medidas políticas se anotan sobre las series, pero el observatorio <b>no afirma</b> que una medida causara un cambio.</p>
 </div></header>
-<div class="wrap" style="max-width:1060px;margin:0 auto;padding:0 20px">{_share_home}</div>
 <div class="inds" id="indicadores">{inds}</div>
 <main>
 <div class="panel" id="estado" style="margin-bottom:8px">
