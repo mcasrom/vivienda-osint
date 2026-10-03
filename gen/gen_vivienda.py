@@ -551,6 +551,80 @@ def svg_multiline(series, w=780, h=270, fmt=None, ticks_n=5):
     return "".join(out)
 
 
+def _slug(s):
+    import unicodedata
+    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode()
+    import re as _re
+    return _re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")
+
+
+def _ccaa_page(nom, d):
+    def _pctv(v):
+        return f"{v:,.1f}".replace(",", "X").replace(".", ",").replace("X", ".") + " %"
+    def _int(v):
+        return f"{int(v):,}".replace(",", ".") if v is not None else "—"
+    def _rate(v):
+        return f"{v:.1f}".replace(".", ",") if v is not None else "—"
+    filas = "".join(f'<tr><td>{E(k)}</td><td class="num">{v}</td><td class="mut">{E(per)}</td>'
+                    f'<td class="mut">{E(src)}</td></tr>' for k, v, per, src in [
+                        ("Compraventas de vivienda", _int(d.get("cv")), d.get("per_cv", "—"), "INE · ETDP"),
+                        ("Lanzamientos (desahucios)", _int(d.get("lz")), d.get("per_lz", "—"), "CGPJ"),
+                        ("Ejecuciones hipotecarias", _int(d.get("eh")), d.get("per_eh", "—"), "INE · EH"),
+                        ("Viviendas de uso turístico", _int(d.get("vut")), d.get("per_vut", "—"), "INE · VUT"),
+                        ("Compraventa (IPV, var. anual)", ("—" if d.get("ipv") is None else _pctv(d["ipv"])),
+                         d.get("per_ipv", "—"), "INE · IPV"),
+                        ("Lanzamientos por 1.000 viviendas", _rate(d.get("lz_rate")), "anualizado ×4", "calc. sobre MIVAU"),
+                        ("Ejecuciones por 1.000 viviendas", _rate(d.get("eh_rate")), "último año", "calc. sobre MIVAU"),
+                    ])
+    body = (f'<h2>Indicadores de {E(nom)}</h2><div class="panel"><table>'
+            f'<thead><tr><th>Indicador</th><th class="num">Valor</th><th>Periodo</th><th>Fuente</th></tr></thead>'
+            f'<tbody>{filas}</tbody></table>'
+            f'<p class="mut" style="font-size:.78rem;margin:10px 0 0">Datos oficiales. Las tasas usan como denominador '
+            f'el total de viviendas (derivado del % VUT del INE). Ver <a href="/metodo.html">método</a> y '
+            f'<a href="/">panel general</a>.</p></div>')
+    return _shell(f"{nom} — datos de vivienda", f"Datos oficiales de vivienda en {nom}: compraventas, lanzamientos, "
+                  f"ejecuciones, viviendas turísticas, precios y tasas. INE/CGPJ/MIVAU.",
+                  f"https://vivienda.pruebapublica.com/ccaa/{_slug(nom)}.html",
+                  f"{nom} — datos de vivienda", f"Situación de la vivienda en {nom}, con datos oficiales y su fuente.", body)
+
+
+def _ccaa_index(pages):
+    items = "".join(f'<li><a href="/ccaa/{_slug(nom)}.html">{E(nom)}</a></li>' for _c, nom, _d in pages)
+    body = (f'<h2>Comunidades autónomas</h2><div class="panel"><ul style="columns:2;font-size:.95rem">{items}</ul>'
+            f'<p class="mut" style="font-size:.8rem;margin-top:10px">Una página por comunidad autónoma, con sus '
+            f'indicadores oficiales. Fuente: INE / CGPJ / MIVAU.</p></div>')
+    return _shell("Comunidades autónomas — datos de vivienda", "Datos oficiales de vivienda por comunidad autónoma.",
+                  "https://vivienda.pruebapublica.com/ccaa/", "Comunidades autónomas",
+                  "Índice de páginas por CCAA del observatorio de la vivienda.", body)
+
+
+def _cambios_xml(normas, hist, hoy):
+    items = []
+    for n in normas:
+        f = n.get("resultado_fecha") or n.get("boe") or n.get("aprobacion")
+        t = f"{n['corta']}: {ESTADO_TXT.get(n['estado'], n['estado'])}"
+        d = (n.get("resultado") or n.get("resumen") or "").strip()
+        if f:
+            items.append((f, t, d, f"https://www.boe.es/buscar/act.php?id={n['id']}"))
+    for c in hist[-30:]:
+        if not c.get("fecha"):
+            continue
+        items.append((c["fecha"], f"Serie actualizada: {c.get('serie')}",
+                      f"nueva versión (md5 {c.get('md5')})",
+                      f"https://vivienda.pruebapublica.com/data/{c.get('serie')}.csv"))
+    items.sort(key=lambda x: x[0], reverse=True)
+    out = ['<?xml version="1.0" encoding="UTF-8"?>', '<rss version="2.0"><channel>',
+           '<title>Observatorio de la vivienda — cambios</title>',
+           '<link>https://vivienda.pruebapublica.com/</link>',
+           '<description>Nuevas normas y cambios en las series de datos del observatorio.</description>',
+           '<language>es</language>']
+    for f, t, d, u in items[:40]:
+        out.append(f'<item><title>{E(t)}</title><link>{E(u)}</link><guid>{E(u)}</guid>'
+                   f'<pubDate>{E(f)}T00:00:00Z</pubDate><description>{E(d)}</description></item>')
+    out.append('</channel></rss>')
+    return "\n".join(out)
+
+
 def build():
     v = via.resumen()
     hoy = date.today().isoformat()
@@ -1010,12 +1084,15 @@ def build():
     with open(os.path.join(OUT_DIR, "llms.txt"), "w", encoding="utf-8") as f:
         f.write(llms)
 
+    _ccaa_links = " · ".join(f'<a href="/ccaa/{_slug(_n)}.html">{E(_n)}</a>'
+                             for _c, _n in territorios.NOMBRE.items())
     doc = f"""<!doctype html><html lang="es"><head><meta charset="utf-8">
 <meta name="google-site-verification" content="mlyuKtDMOhZ2x2lMrqr-MHT9LeUW8i6uEJw1Sv6AzNY">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Observatorio de la vivienda — datos oficiales</title>
 <meta name="description" content="Qué dicen los datos oficiales de vivienda (INE, CGPJ, BOE), sin puntuaciones ni atribuciones. Compraventas, alquiler, ejecuciones hipotecarias, lanzamientos y viviendas turísticas, con fuente y fecha.">
 <link rel="canonical" href="https://vivienda.pruebapublica.com/">
+<link rel="alternate" type="application/rss+xml" title="Cambios en el observatorio" href="/cambios.xml">
 <meta property="og:title" content="Observatorio de la vivienda">
 <meta property="og:description" content="Datos oficiales de vivienda con fuente y fecha. Sin puntuaciones ni atribuciones.">
 <meta name="robots" content="index, follow">
@@ -1062,7 +1139,7 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 @media(max-width:820px){{.inds{{grid-template-columns:repeat(2,1fr)}} .grid{{grid-template-columns:1fr}}}}
 </style></head><body>
 <nav class="nav"><div class="in"><b>🏠 Observatorio de la vivienda</b>
-<a href="#indicadores">Indicadores</a><a href="#inflacion">Inflación</a><a href="#comparador">Comparador</a><a href="#calendario">Calendario</a><a href="#medidas">Medidas</a><a href="#metodo">Método</a><a href="#apoyar">Apoyar</a><a href="/fuentes.html">Fuentes</a><a href="/propiedad.html">Propiedad</a><a href="/datos.html">Datos</a>
+<a href="#indicadores">Indicadores</a><a href="#inflacion">Inflación</a><a href="#comparador">Comparador</a><a href="#calendario">Calendario</a><a href="#medidas">Medidas</a><a href="#zmrt">Zonas</a><a href="#metodo">Método</a><a href="#apoyar">Apoyar</a><a href="/fuentes.html">Fuentes</a><a href="/propiedad.html">Propiedad</a><a href="/datos.html">Datos</a><a href="/ccaa/">CCAA</a>
 <a href="https://pruebapublica.com" style="opacity:.7">pruebapublica.com</a></div></nav>
 <header class="hero"><div class="wrap">
 <h1>Qué dicen los datos oficiales de vivienda, sin puntuaciones ni atribuciones</h1>
@@ -1144,7 +1221,7 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 <div class="panel">
 <p style="margin:0 0 10px"><label>Elige la comunidad: <select id="regsel">{_opts}</select></label></p>
 <table><thead><tr><th>Indicador</th><th>Periodo</th><th class="num">España</th><th class="num">Región</th></tr></thead><tbody>{comp_rows}</tbody></table>
-<p class="mut" style="font-size:.78rem;margin:8px 0 0">El IPV compara la variación anual de la región con la nacional; los lanzamientos, el trimestre más reciente del CGPJ.</p></div>
+<p class="mut" style="font-size:.78rem;margin:8px 0 0">El IPV compara la variación anual de la región con la nacional; los lanzamientos, el trimestre más reciente del CGPJ.</p><p class="mut" style="font-size:.78rem;margin:8px 0 0">Páginas por comunidad: {_ccaa_links}.</p></div>
 
 <h2 id="calendario">Calendario de publicaciones</h2>
 <div class="panel">{cal}</div>
@@ -1197,15 +1274,47 @@ sel.addEventListener('change',upd);
     # robots + sitemap como ficheros reales
     with open(os.path.join(OUT_DIR, "robots.txt"), "w", encoding="utf-8") as f:
         f.write("User-agent: *\nAllow: /\nSitemap: https://vivienda.pruebapublica.com/sitemap.xml\n")
+    _urls = ["https://vivienda.pruebapublica.com/",
+             "https://vivienda.pruebapublica.com/fuentes.html",
+             "https://vivienda.pruebapublica.com/propiedad.html",
+             "https://vivienda.pruebapublica.com/datos.html",
+             "https://vivienda.pruebapublica.com/ccaa/"]
+    _urls += [f"https://vivienda.pruebapublica.com/ccaa/{_slug(_n)}.html"
+              for _c, _n in territorios.NOMBRE.items()]
     with open(os.path.join(OUT_DIR, "sitemap.xml"), "w", encoding="utf-8") as f:
         f.write('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-                f'<url><loc>https://vivienda.pruebapublica.com/</loc><lastmod>{hoy}</lastmod></url>\n<url><loc>https://vivienda.pruebapublica.com/fuentes.html</loc><lastmod>{hoy}</lastmod></url>\n<url><loc>https://vivienda.pruebapublica.com/propiedad.html</loc><lastmod>{hoy}</lastmod></url>\n<url><loc>https://vivienda.pruebapublica.com/datos.html</loc><lastmod>{hoy}</lastmod></url>\n</urlset>\n')
+                + "".join(f"<url><loc>{u}</loc><lastmod>{hoy}</lastmod></url>\n" for u in _urls)
+                + "</urlset>\n")
     with open(os.path.join(OUT_DIR, "fuentes.html"), "w", encoding="utf-8") as f:
         f.write(_fuentes_html())
     with open(os.path.join(OUT_DIR, "propiedad.html"), "w", encoding="utf-8") as f:
         f.write(_propiedad_html())
     with open(os.path.join(OUT_DIR, "datos.html"), "w", encoding="utf-8") as f:
         f.write(_datos_html(datasets))
+    # páginas por CCAA + índice
+    _cvd = {k: v for k, v in cv}
+    _vtd = {k: v for k, v in vut}
+    _tasd = {c: (l, e) for c, l, e in _tasas}
+    _ccaa_pages = []
+    for _cod, _nom in territorios.NOMBRE.items():
+        _d = {"cv": _cvd.get(_nom), "lz": _lz_d.get(_nom), "eh": _eh_d.get(_nom), "vut": _vtd.get(_nom),
+              "ipv": ine.ultimo(f"ipv_var_anual:{_cod}"), "lz_rate": _tasd.get(_nom, (None, None))[0],
+              "eh_rate": _tasd.get(_nom, (None, None))[1], "per_cv": per_cv, "per_lz": per_lz,
+              "per_eh": per_eh, "per_vut": per_vut, "per_ipv": per_ipv}
+        _ccaa_pages.append((_cod, _nom, _d))
+    os.makedirs(os.path.join(OUT_DIR, "ccaa"), exist_ok=True)
+    for _cod, _nom, _d in _ccaa_pages:
+        with open(os.path.join(OUT_DIR, "ccaa", _slug(_nom) + ".html"), "w", encoding="utf-8") as f:
+            f.write(_ccaa_page(_nom, _d))
+    with open(os.path.join(OUT_DIR, "ccaa", "index.html"), "w", encoding="utf-8") as f:
+        f.write(_ccaa_index(_ccaa_pages))
+    # RSS de cambios (normas + cambios de series)
+    try:
+        _hist = json.load(open(os.path.join(ROOT, "data", "historial.json"), encoding="utf-8"))
+    except (OSError, ValueError):
+        _hist = []
+    with open(os.path.join(OUT_DIR, "cambios.xml"), "w", encoding="utf-8") as f:
+        f.write(_cambios_xml(_REGN["normas"], _hist, hoy))
     print(f"[gen] index + fuentes + propiedad + datos + {len(datasets)} series (CSV/JSON) · IPV={len(ipv)} pts · EH CCAA={len(eh)} · alquiler SERPAVI {_serp_n} municipios (oferta de portales NO publicable: muestra de {v['n']})")
 
 

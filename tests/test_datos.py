@@ -425,6 +425,30 @@ else:
     if os.path.exists(html_p):
         check('id="zmrt"' in page, "la portada no incluye la sección de zonas tensionadas")
 
+# ---------------------------------------------------------------------------
+# 20. páginas por CCAA + RSS de cambios
+# ---------------------------------------------------------------------------
+_ccdir = os.path.join(WEB, "ccaa")
+if os.path.isdir(_ccdir):
+    _ncc = len([x for x in os.listdir(_ccdir) if x.endswith(".html") and x != "index.html"])
+    check(_ncc >= 15, f"pocas páginas por CCAA: {_ncc}")
+    check(os.path.exists(os.path.join(_ccdir, "index.html")), "falta ccaa/index.html")
+    if os.path.exists(html_p):
+        check('href="/ccaa/' in page, "la portada no enlaza las páginas por CCAA")
+else:
+    OMITIDO.append("web/ccaa/")
+_rss = os.path.join(WEB, "cambios.xml")
+if os.path.exists(_rss):
+    try:
+        import xml.dom.minidom as _md
+        _md.parse(_rss)
+        check("Observatorio de la vivienda" in open(_rss, encoding="utf-8").read(),
+              "cambios.xml sin título")
+    except Exception as _e:
+        FALLOS.append(f"cambios.xml no es XML válido: {_e}")
+else:
+    OMITIDO.append("web/cambios.xml")
+
 if FALLOS:
     print(f"FALLOS ({len(FALLOS)}):", file=sys.stderr)
     for f in FALLOS:
