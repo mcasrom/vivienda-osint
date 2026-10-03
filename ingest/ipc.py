@@ -19,6 +19,8 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import sys
+import time
 import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -55,9 +57,16 @@ def _get(u):
     return json.load(urllib.request.urlopen(req, timeout=45))
 
 
-def _datos(cod: str, nult: int):
-    d = _get(f"https://servicios.ine.es/wstempus/js/ES/DATOS_SERIE/{cod}?nult={nult}")
-    return d if isinstance(d, list) else [d]
+def _datos(cod: str, nult: int, intentos: int = 3):
+    for i in range(intentos):
+        try:
+            d = _get(f"https://servicios.ine.es/wstempus/js/ES/DATOS_SERIE/{cod}?nult={nult}")
+            return d if isinstance(d, list) else [d]
+        except Exception as e:
+            if i == intentos - 1:
+                raise
+            print(f"[ipc] {cod} intento {i + 1} falló ({e}); reintento", file=sys.stderr)
+            time.sleep(2 * (i + 1))
 
 
 def _fecha(x) -> str:
@@ -75,9 +84,9 @@ def _fecha(x) -> str:
 
 
 def ingest() -> int:
-    c = _con()
-    c.execute("DELETE FROM ipc_serie")   # reingesta autoritativa (re-fetch completo)
-    n = 0
+    # 1) construir en memoria SIN tocar la tabla: un fallo (transitorio) de INE
+    #    NO puede dejar `ipc_serie` vacía (era el bug: DELETE antes de descargar).
+    filas = []
     for comp, (_etq, cvar, cidx, cpond) in COMPONENTES.items():
         for tipo, cod in (("var_anual", cvar), ("indice", cidx), ("ponderacion", cpond)):
             if not cod:
@@ -91,10 +100,15 @@ def ingest() -> int:
                     fecha = _fecha(x)
                     if not fecha:
                         continue
-                    n += c.execute("INSERT OR REPLACE INTO ipc_serie VALUES(?,?,?,?)",
-                                   (comp, tipo, fecha, float(val))).rowcount
+                    filas.append((comp, tipo, fecha, float(val)))
+    # 2) sanity: no reemplazar la tabla por un conjunto incompleto
+    if len(filas) < 50:
+        raise RuntimeError(f"ipc: solo {len(filas)} puntos; no se toca la tabla")
+    c = _con()
+    c.execute("DELETE FROM ipc_serie")
+    c.executemany("INSERT OR REPLACE INTO ipc_serie VALUES(?,?,?,?)", filas)
     c.commit()
-    return n
+    return len(filas)
 
 
 # --- lecturas ---------------------------------------------------------------

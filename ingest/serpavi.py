@@ -49,22 +49,25 @@ def _con():
 
 
 def ingest() -> int:
-    c = _con()
-    c.execute("DELETE FROM serpavi")
+    # 1) leer via.db en memoria (sin tocar la tabla de vivienda)
     v = sqlite3.connect(f"file:{VIA}?mode=ro", uri=True)
     v.row_factory = sqlite3.Row
-    n = 0
+    filas = []
     for r in v.execute("SELECT codigo_ine, municipio, provincia, oficial_eur_m2, "
                        "oficial_p25, oficial_p75, oficial_anio FROM via_index "
                        "WHERE oficial_eur_m2 IS NOT NULL"):
         _ine = str(r["codigo_ine"] or "")
         _prov = (r["provincia"] or "").strip() or PROV.get(_ine[:2], "")
-        c.execute("INSERT OR REPLACE INTO serpavi VALUES(?,?,?,?,?,?,?)",
-                  (_ine, r["municipio"] or "", _prov, float(r["oficial_eur_m2"]),
-                   r["oficial_p25"], r["oficial_p75"], str(r["oficial_anio"] or "")))
-        n += 1
+        filas.append((_ine, r["municipio"] or "", _prov, float(r["oficial_eur_m2"]),
+                      r["oficial_p25"], r["oficial_p75"], str(r["oficial_anio"] or "")))
+    if len(filas) < 50:
+        raise RuntimeError(f"serpavi: solo {len(filas)} filas; no se toca la tabla")
+    # 2) swap atómico
+    c = _con()
+    c.execute("DELETE FROM serpavi")
+    c.executemany("INSERT OR REPLACE INTO serpavi VALUES(?,?,?,?,?,?,?)", filas)
     c.commit()
-    return n
+    return len(filas)
 
 
 def _ro():
