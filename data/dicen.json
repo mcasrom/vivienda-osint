@@ -1,0 +1,45 @@
+{
+ "marco": "Frases que se repiten a menudo, contrastadas con el dato oficial más reciente. El observatorio no enjuicia la opinión: solo pone la cifra, con su fuente y su periodo. Una frase puede ser cierta en otro momento o en otro ámbito; aquí se mide con este dato.",
+ "items": [
+  {
+   "id": "precio-no-baja",
+   "se_dice": "«La vivienda ya está bajando.»",
+   "dato": "El precio de la compraventa subió un <b>12,2 %</b> interanual (IPV, 2026 2T).",
+   "matiz": "El ritmo se modera (venía de un 12,9 %), pero moderarse <b>no es</b> bajar: el nivel sigue por encima del de hace un año.",
+   "fuente": "INE · IPV, 2026 2T",
+   "url": "https://www.ine.es/"
+  },
+  {
+   "id": "compraventas-maximo",
+   "se_dice": "«Se compran cada vez menos viviendas.»",
+   "dato": "En 2025 se inscribieron <b>711.543</b> compraventas de vivienda: el máximo de la serie disponible desde 2020.",
+   "matiz": "En 2024 fueron 640.401 y en 2020, 420.238. La tendencia reciente de la serie es al alza, no a la baja.",
+   "fuente": "INE · ETDP, 2025",
+   "url": "https://www.ine.es/"
+  },
+  {
+   "id": "lanzamientos-bajan",
+   "se_dice": "«Los desahucios se están disparando.»",
+   "dato": "Los lanzamientos judiciales bajaron a <b>4.005</b> en el 1T de 2026, el dato más bajo de los últimos cinco trimestres.",
+   "matiz": "Venía de 7.334 en el 1T de 2025. Un solo trimestre no hace tendencia, pero el último dato apunta a la baja.",
+   "fuente": "CGPJ · lanzamientos, 26-T1",
+   "url": "https://www.poderjudicial.es/cgpj/es/Temas/Estadistica-Judicial/"
+  },
+  {
+   "id": "turisticos-promedio",
+   "se_dice": "«España está llena de pisos turísticos.»",
+   "dato": "Las viviendas de uso turístico son <b>341.001</b>: el <b>1,28 %</b> del total de viviendas censadas (2026).",
+   "matiz": "El promedio nacional esconde la concentración: en Canarias son el 4,44 % del parque y en Baleares, el 3,27 %.",
+   "fuente": "INE · VUT, 2026",
+   "url": "https://www.ine.es/"
+  },
+  {
+   "id": "ejecuciones-repunte",
+   "se_dice": "«Las ejecuciones hipotecarias se han disparado.»",
+   "dato": "En 2025 hubo <b>14.983</b> ejecuciones hipotecarias sobre vivienda, un <b>18 %</b> más que en 2024.",
+   "matiz": "Aun así sigue muy por debajo de 2021 (20.694) y 2020 (18.920): es un repunte, no un máximo.",
+   "fuente": "INE · EH, 2025",
+   "url": "https://www.ine.es/"
+  }
+ ]
+}

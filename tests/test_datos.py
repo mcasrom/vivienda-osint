@@ -466,6 +466,25 @@ if os.path.exists(_cardsf):
 else:
     OMITIDO.append("web/og/cards.json")
 
+# ---------------------------------------------------------------------------
+# 22. "Se dice / dicen los datos" (contraste curado)
+# ---------------------------------------------------------------------------
+_dicf = os.path.join(ROOT, "data", "dicen.json")
+if not os.path.exists(_dicf):
+    OMITIDO.append("data/dicen.json (curado)")
+else:
+    try:
+        _dj = json.load(open(_dicf, encoding="utf-8"))
+        _it = _dj.get("items", [])
+        check(len(_it) >= 4, f"pocos contrastes en dicen.json: {len(_it)}")
+        for _x in _it:
+            check(all(k in _x for k in ("se_dice", "dato", "fuente", "url")), f"item incompleto: {_x.get('id')}")
+            check(_x.get("url", "").startswith("http"), f"url no válida en {_x.get('id')}")
+    except ValueError as _e:
+        FALLOS.append(f"dicen.json no es JSON válido: {_e}")
+    if os.path.exists(html_p):
+        check('id="dicen"' in page, "la portada no incluye 'Se dice / dicen los datos'")
+
 if FALLOS:
     print(f"FALLOS ({len(FALLOS)}):", file=sys.stderr)
     for f in FALLOS:

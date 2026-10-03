@@ -41,6 +41,13 @@ try:
         ZMRT = json.load(_fh)
 except (OSError, ValueError):
     ZMRT = {}
+# Se dice / dicen los datos: contraste curado de frases frecuentes con el dato oficial
+DICEN_F = os.path.join(ROOT, "data", "dicen.json")
+try:
+    with open(DICEN_F, encoding="utf-8") as _fh:
+        DICEN = json.load(_fh)
+except (OSError, ValueError):
+    DICEN = {}
 ESTADO_TXT = {
     "publicada": "Publicada",
     "en_votacion": "Pendiente de convalidación o derogación",
@@ -906,6 +913,23 @@ def build():
                f'{E(_zm_res.get("boe", ""))} ({E(_zm_res.get("trimestre", ""))}) ↗</a>'
                if _zm_res.get("url") else "del BOE")
     _zm_mivau = _zm.get("acumulado_mivau", "")
+    # "Se dice / dicen los datos": contraste curado
+    _dic = DICEN or {}
+    _dic_cards = "".join(
+        f'<div class="panel" style="margin:0">'
+        f'<p style="font-size:.72rem;font-weight:bold;color:#f87171;margin:0 0 2px;letter-spacing:.04em;text-transform:uppercase">Se dice</p>'
+        f'<p style="font-size:1.02rem;margin:0 0 10px;font-style:italic">{E(it.get("se_dice", ""))}</p>'
+        f'<p style="font-size:.72rem;font-weight:bold;color:#0891b2;margin:0 0 2px;letter-spacing:.04em;text-transform:uppercase">Dicen los datos</p>'
+        f'<p style="font-size:.95rem;margin:0 0 8px">{it.get("dato", "")}</p>'
+        f'<p class="mut" style="font-size:.82rem;margin:0 0 8px">{it.get("matiz", "")}</p>'
+        f'<p class="mut" style="font-size:.74rem;margin:0">Fuente: <a href="{E(it.get("url", ""))}" '
+        f'target="_blank" rel="noopener">{E(it.get("fuente", ""))} ↗</a></p></div>'
+        for it in _dic.get("items", []))
+    dicen_html = (""
+                  if not _dic_cards else
+                  '<h2 id="dicen">Se dice / dicen los datos</h2><div class="panel">'
+                  f'<p class="mut" style="font-size:.85rem;margin:0 0 12px">{E(_dic.get("marco", ""))}</p>'
+                  f'<div class="grid">{_dic_cards}</div></div>')
 
     # --- exportaciones CSV/JSON (por serie) ---
     datasets = []
@@ -1151,7 +1175,7 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 @media(max-width:820px){{.inds{{grid-template-columns:repeat(2,1fr)}} .grid{{grid-template-columns:1fr}}}}
 </style></head><body>
 <nav class="nav"><div class="in"><b>🏠 Observatorio de la vivienda</b>
-<a href="#indicadores">Indicadores</a><a href="#inflacion">Inflación</a><a href="#comparador">Comparador</a><a href="#calendario">Calendario</a><a href="#medidas">Medidas</a><a href="#zmrt">Zonas</a><a href="#metodo">Método</a><a href="#apoyar">Apoyar</a><a href="/fuentes.html">Fuentes</a><a href="/propiedad.html">Propiedad</a><a href="/datos.html">Datos</a><a href="/ccaa/">CCAA</a>
+<a href="#indicadores">Indicadores</a><a href="#inflacion">Inflación</a><a href="#comparador">Comparador</a><a href="#dicen">Se dice</a><a href="#calendario">Calendario</a><a href="#medidas">Medidas</a><a href="#zmrt">Zonas</a><a href="#metodo">Método</a><a href="#apoyar">Apoyar</a><a href="/fuentes.html">Fuentes</a><a href="/propiedad.html">Propiedad</a><a href="/datos.html">Datos</a><a href="/ccaa/">CCAA</a>
 <a href="https://pruebapublica.com" style="opacity:.7">pruebapublica.com</a></div></nav>
 <header class="hero"><div class="wrap">
 <h1>Qué dicen los datos oficiales de vivienda, sin puntuaciones ni atribuciones</h1>
@@ -1234,6 +1258,8 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 <p style="margin:0 0 10px"><label>Elige la comunidad: <select id="regsel">{_opts}</select></label></p>
 <table><thead><tr><th>Indicador</th><th>Periodo</th><th class="num">España</th><th class="num">Región</th></tr></thead><tbody>{comp_rows}</tbody></table>
 <p class="mut" style="font-size:.78rem;margin:8px 0 0">El IPV compara la variación anual de la región con la nacional; los lanzamientos, el trimestre más reciente del CGPJ.</p><p class="mut" style="font-size:.78rem;margin:8px 0 0">Páginas por comunidad: {_ccaa_links}.</p></div>
+
+{dicen_html}
 
 <h2 id="calendario">Calendario de publicaciones</h2>
 <div class="panel">{cal}</div>
