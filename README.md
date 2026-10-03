@@ -57,6 +57,7 @@ verificar.
 | `alquiler-serpavi` | Alquiler de referencia por municipio (contratos/fianzas) | MIVAU · SERPAVI (VDP001) | 2024 |
 | `ejecuciones-hipotecarias-ccaa` · `-nacional` | Ejecuciones hipotecarias iniciadas | INE · tabla 10740 | anual |
 | `compraventas-ccaa` · `-nacional` | Compraventas de vivienda inscritas | INE · ETDP (tabla 49280) | anual |
+| `hipotecas-nacional` | Hipotecas constituidas de vivienda | INE · HPT (tabla 3200) | mensual |
 | `lanzamientos-ccaa` · `-cronologia` | Lanzamientos (desahucios) | CGPJ | trimestral |
 | `viviendas-turisticas-ccaa` | Viviendas de uso turístico | INE · tabla 46141 | anual |
 | `boe-vivienda` | Disposiciones del BOE sobre vivienda (sección I) | BOE | diario |
