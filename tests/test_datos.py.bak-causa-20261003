@@ -510,34 +510,6 @@ if os.path.exists(_mapf):
     check(_maph.count('class="ccaa"') >= 15, "el mapa tiene muy pocas CCAA")
     check('id="msel"' in _maph and "mapsvg" in _maph, "el mapa no tiene selector/svg")
 
-# ---------------------------------------------------------------------------
-# 25. lanzamientos por causa (CGPJ): hipotecaria + LAU + otros = total
-# ---------------------------------------------------------------------------
-_per_c = None
-try:
-    _c = sqlite3.connect(f"file:{DB_P}?mode=ro", uri=True)
-    _per_c = _c.execute("SELECT MAX(periodo) FROM lanzamientos_causa").fetchone()[0]
-except sqlite3.OperationalError:
-    _per_c = None
-if not _per_c:
-    OMITIDO.append("lanzamientos_causa (sin tabla/datos)")
-else:
-    _nac_tot = _c.execute("SELECT valor FROM lanzamientos WHERE ambito='TOTAL' AND periodo=?", (_per_c,)).fetchone()
-    _nac_cau = _c.execute("SELECT SUM(valor) FROM lanzamientos_causa WHERE ambito='TOTAL' AND periodo=?", (_per_c,)).fetchone()
-    if _nac_tot and _nac_cau and _nac_tot[0] is not None and _nac_cau[0] is not None:
-        check(abs(float(_nac_tot[0]) - float(_nac_cau[0])) < 1e-6,
-              f"lanzamientos {_per_c}: suma de causas ({_nac_cau[0]}) != total ({_nac_tot[0]})")
-    _tot = dict(_c.execute("SELECT ambito, valor FROM lanzamientos WHERE periodo=? AND ambito<>'TOTAL'", (_per_c,)).fetchall())
-    _cau = dict(_c.execute("SELECT ambito, SUM(valor) FROM lanzamientos_causa "
-                           "WHERE periodo=? AND ambito<>'TOTAL' GROUP BY ambito", (_per_c,)).fetchall())
-    for _a, _v in _tot.items():
-        if _a in _cau and _cau[_a] is not None:
-            check(abs(float(_v) - float(_cau[_a])) < 1e-6,
-                  f"lanzamientos {_a}: suma de causas ({_cau[_a]}) != total ({_v}) en {_per_c}")
-    if os.path.isdir(os.path.join(WEB, "data")):
-        check(os.path.exists(os.path.join(WEB, "data", "lanzamientos-causa.json")),
-              "falta el dataset lanzamientos-causa.json")
-
 if FALLOS:
     print(f"FALLOS ({len(FALLOS)}):", file=sys.stderr)
     for f in FALLOS:

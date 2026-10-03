@@ -853,23 +853,6 @@ def build():
     lz_crono = " · ".join(f"{p} <b>{int(v):,}</b>".replace(",", ".") for p, v in cgpj.cronologia() if v)
     lz_serie = cgpj.cronologia()
     lz_tot_txt = f"{int(lz_total):,}".replace(",", ".") if lz_total else "—"
-    # desglose por causa (CGPJ: hipotecaria + LAU + otros = total)
-    lzc_per, lzc_nac, lzc_ccaa = cgpj.por_causa()
-    _lzc_crono = cgpj.causa_cronologia()
-    _LZC_LAB = {"hipotecaria": "Ejecución hipotecaria", "lau": "LAU (arrendamientos)", "otros": "Otras causas"}
-    _lzc_total = int(round(sum(v for v in lzc_nac.values() if v is not None))) if lzc_nac else None
-    _lzc_rows = ""
-    for _cz, _vl in sorted(lzc_nac.items(), key=lambda kv: -(kv[1] or 0)):
-        if _vl is None:
-            continue
-        _vs = f"{int(round(_vl)):,}".replace(",", ".")
-        _pc = f"{(_vl / _lzc_total * 100):.1f}".replace(".", ",") if _lzc_total else "—"
-        _lzc_rows += (f'<tr><td>{E(_LZC_LAB.get(_cz, _cz))}</td>'
-                      f'<td class="num">{_vs}</td><td class="num">{_pc} %</td></tr>')
-    lzc_tot_txt = f"{_lzc_total:,}".replace(",", ".") if _lzc_total else "—"
-    lzc_tabla = (f'<table><thead><tr><th>Causa</th><th class="num">Lanzamientos</th>'
-                 f'<th class="num">% del total</th></tr></thead><tbody>{_lzc_rows}</tbody></table>'
-                 if _lzc_rows else '<p class="mut">Sin desglose disponible.</p>')
     eh_nac = ine.eh_nacional()
     eh_crono = " · ".join(f"{a} <b>{int(v):,}</b>".replace(",", ".") for a, v in eh_nac)
     eh_tot_txt = f"{int(eh_total):,}".replace(",", ".") if eh_total else "—"
@@ -1179,21 +1162,6 @@ def build():
                    "CGPJ · Efecto de la crisis",
                    f"{lz_serie[0][0]}–{lz_serie[-1][0]}" if lz_serie else "—", "CGPJ — datos judiciales públicos",
                    ["periodo", "lanzamientos"], [{"periodo": p, "lanzamientos": int(v)} for p, v in lz_serie], datasets)
-    if lzc_nac:
-        _write_dataset("lanzamientos-causa", "Lanzamientos (desahucios) nacionales por causa",
-                       "CGPJ · Efecto de la crisis",
-                       f"{_lzc_crono[0][1]}–{_lzc_crono[-1][1]}" if _lzc_crono else "—",
-                       "CGPJ — datos judiciales públicos",
-                       ["periodo", "causa", "lanzamientos"],
-                       [{"periodo": p, "causa": cz, "lanzamientos": int(v)}
-                        for cz, p, v in _lzc_crono if v is not None], datasets)
-        _write_dataset("lanzamientos-causa-ccaa", "Lanzamientos (desahucios) por CCAA y causa",
-                       "CGPJ · Efecto de la crisis", lzc_per or "—",
-                       "CGPJ — datos judiciales públicos",
-                       ["periodo", "ccaa", "causa", "lanzamientos"],
-                       [{"periodo": lzc_per, "ccaa": c, "causa": cz, "lanzamientos": int(v)}
-                        for c in sorted(lzc_ccaa) for cz, v in sorted(lzc_ccaa[c].items()) if v is not None],
-                       datasets)
     _write_dataset("viviendas-turisticas-ccaa", "Viviendas de uso turístico por CCAA", "INE · tabla 46141",
                    str(vut_anyo) if vut_anyo else "—", "INE — reutilización citando fuente",
                    ["ccaa", "viviendas_turisticas"],
@@ -1451,11 +1419,6 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 <p style="font-size:.85rem;margin:18px 0 2px"><b>Cronología nacional</b> · lanzamientos por trimestre</p>
 {svg_line([(str(a), v) for a, v in lz_serie], color="#c2410c", fmt=lambda v: f"{int(v):,}".replace(",", "."))}
 <p class="mut" style="font-size:.8rem">Lanzamientos <b>practicados</b> (desalojo), por CCAA. Total {lz_per}: <b>{lz_tot_txt}</b>. Fuente: <a href="https://www.poderjudicial.es/">CGPJ</a> (trimestral).</p>{_descarga("lanzamientos-ccaa")}</div>
-
-<div class="panel">
-<h3 style="margin:0 0 8px;font-size:1rem">Desglose por causa <span class="mut" style="font-weight:400">· CGPJ {E(str(lzc_per or "—"))}</span></h3>
-{lzc_tabla}
-<p class="mut" style="font-size:.8rem">Ejecución hipotecaria + LAU (arrendamientos) + otras causas = <b>{lzc_tot_txt}</b> lanzamientos practicados ({E(str(lzc_per or "—"))}); coincide con el total. Fuente: <a href="https://www.poderjudicial.es/">CGPJ</a> (trimestral).</p>{_descarga("lanzamientos-causa")}</div>
 
 <h2>Viviendas turísticas por CCAA <span>· INE{f" · {vut_anyo}" if vut_anyo else ""}</span></h2>
 <div class="panel">

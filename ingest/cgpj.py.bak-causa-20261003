@@ -27,48 +27,7 @@ UA = {"User-Agent": "vivienda-osint/0.1 (+pruebapublica.com)"}
 def _con():
     c = sqlite3.connect(DB)
     c.execute("CREATE TABLE IF NOT EXISTS lanzamientos(ambito TEXT, periodo TEXT, valor REAL, PRIMARY KEY(ambito,periodo))")
-    c.execute("CREATE TABLE IF NOT EXISTS lanzamientos_causa(causa TEXT, ambito TEXT, periodo TEXT, valor REAL, PRIMARY KEY(causa,ambito,periodo))")
     return c
-
-
-# Desglose por causa: hojas del mismo XLSX del CGPJ (hipotecaria + LAU + otros = total).
-CAUSAS = {
-    "hipotecaria": "Lanzamientos E.hipotecaria TSJ",
-    "lau": "Lanzamientos L.A.U  TSJ",
-    "otros": "Lanzamientos. Otros TSJ",
-}
-
-
-def _norm(s):
-    return re.sub(r"\s+", " ", s.replace(".", " ")).strip().lower()
-
-
-def _hoja_por_nombre(wb, nombre):
-    for n in wb.sheetnames:
-        if _norm(n) == _norm(nombre):
-            return wb[n]
-    return None
-
-
-def _bloque_hoja(ws):
-    """Devuelve (cols, ult_periodo, bloque) de una hoja de lanzamientos del CGPJ."""
-    filas = list(ws.iter_rows(values_only=True))
-    hi = next(i for i, r in enumerate(filas)
-              if any(isinstance(c, str) and re.fullmatch(r"\d\d-T\d", c.strip()) for c in r))
-    header = filas[hi]
-    cols = [(j, c.strip()) for j, c in enumerate(header)
-            if isinstance(c, str) and re.fullmatch(r"\d\d-T\d", c.strip())]
-    bloque = []
-    for r in filas[hi + 1:]:
-        amb = r[1] if isinstance(r[1], str) else None
-        if amb is None or not amb.strip():
-            if bloque:
-                break
-            continue
-        bloque.append((amb.strip(), r))
-        if amb.strip().upper() == "TOTAL":
-            break
-    return cols, cols[-1][1], bloque
 
 
 def _get(url, bin=False):
@@ -173,41 +132,6 @@ def ingest() -> tuple[int, str, str]:
                     c.execute("INSERT OR REPLACE INTO lanzamientos VALUES(?,?,?)", ("TOTAL", per, float(r[j])))
                 except (TypeError, ValueError):
                     pass
-    # desglose por causa (hojas Hipotecaria / LAU / Otros del mismo XLSX)
-    ncausa = 0
-    for causa, nombre_hoja in CAUSAS.items():
-        ws_c = _hoja_por_nombre(wb, nombre_hoja)
-        if ws_c is None:
-            print(f"[cgpj] AVISO: sin hoja de causa '{nombre_hoja}'", file=sys.stderr)
-            continue
-        ccols, _, cbloque = _bloque_hoja(ws_c)
-        # El CGPJ etiqueta a veces mal una columna en una hoja (p. ej. la LAU
-        # repite «25-T1» en el último trimestre). Se alinean los periodos por
-        # POSICIÓN con los de la hoja total (correctos) para no asignar el dato
-        # al trimestre equivocado.
-        if [j for j, _ in ccols] == [j for j, _ in cols]:
-            ccols = [(j, cols[i][1]) for i, (j, _) in enumerate(ccols)]
-        ccol = ccols[-1][0]
-        cper = ccols[-1][1]
-        for amb, r in cbloque:
-            if amb.upper() == "TOTAL":
-                continue
-            canon = territorios.canonico(amb)
-            if canon is None:
-                continue
-            try:
-                v = float(r[ccol])
-            except (TypeError, ValueError):
-                continue
-            c.execute("INSERT OR REPLACE INTO lanzamientos_causa VALUES(?,?,?,?)", (causa, canon, cper, v))
-            ncausa += 1
-        for amb, r in cbloque:
-            if amb.upper() == "TOTAL":
-                for j, per in ccols:
-                    try:
-                        c.execute("INSERT OR REPLACE INTO lanzamientos_causa VALUES(?,?,?,?)", (causa, "TOTAL", per, float(r[j])))
-                    except (TypeError, ValueError):
-                        pass
     c.commit()
     return n, ult_periodo, os.path.basename(url)
 
@@ -227,29 +151,6 @@ def por_ccaa(periodo=None):
 def cronologia():
     c = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
     return c.execute("SELECT periodo, valor FROM lanzamientos WHERE ambito='TOTAL' ORDER BY periodo").fetchall()
-
-
-def por_causa(periodo=None):
-    """Desglose del último trimestre por causa: nacional (dict) + por CCAA (dict anidado)."""
-    c = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
-    if periodo is None:
-        periodo = c.execute("SELECT MAX(periodo) FROM lanzamientos_causa").fetchone()[0]
-    if periodo is None:
-        return None, {}, {}
-    nac = dict(c.execute("SELECT causa, valor FROM lanzamientos_causa "
-                         "WHERE periodo=? AND ambito='TOTAL'", (periodo,)).fetchall())
-    por_ccaa = {}
-    for amb, causa, v in c.execute("SELECT ambito, causa, valor FROM lanzamientos_causa "
-                                   "WHERE periodo=? AND ambito<>'TOTAL'", (periodo,)).fetchall():
-        por_ccaa.setdefault(territorios.canonico(amb) or amb, {})[causa] = v
-    return periodo, nac, por_ccaa
-
-
-def causa_cronologia():
-    """Serie nacional por causa (todas las columnas): [(causa, periodo, valor), ...]."""
-    c = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
-    return c.execute("SELECT causa, periodo, valor FROM lanzamientos_causa "
-                     "WHERE ambito='TOTAL' ORDER BY causa, periodo").fetchall()
 
 
 if __name__ == "__main__":

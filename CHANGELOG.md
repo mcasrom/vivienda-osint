@@ -1,5 +1,16 @@
 # Registro de cambios · vivienda-osint
 
+## [Sin publicar] — 2026-10-03
+- **Lanzamientos (desahucios) por causa**: el Excel del CGPJ desglosa los lanzamientos
+  practicados en **ejecución hipotecaria + LAU + otras**. Se ingestan las tres hojas
+  (`ingest/cgpj.py`, tabla `lanzamientos_causa`), se publica un bloque **«Desglose por causa»**
+  y dos datasets: `lanzamientos-causa` (nacional, histórico) y `lanzamientos-causa-ccaa`
+  (último trimestre, por CCAA). **Validado**: hipotecaria + LAU + otras = total, nacional y por
+  CCAA (`test_datos` §25). ⚠️ El CGPJ **etiqueta mal** la última columna de la hoja LAU (repite
+  «25-T1»): los periodos se alinean por **posición** con la hoja total para no asignar el dato
+  al trimestre equivocado.
+- **`CITATION.cff`** (CFF 1.2.0) para citabilidad; DOI de Zenodo pendiente (ver README §Citar).
+
 ## [0.1.0] — 2026-10-02
 Primera versión etiquetada tras la auditoría externa del alquiler €/m².
 

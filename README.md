@@ -61,7 +61,7 @@ Además del catálogo, la portada incluye secciones de contexto regulatorio: **n
 | `ejecuciones-hipotecarias-ccaa` · `-nacional` | Ejecuciones hipotecarias iniciadas | INE · tabla 10740 | anual |
 | `compraventas-ccaa` · `-nacional` | Compraventas de vivienda inscritas | INE · ETDP (tabla 49280) | anual |
 | `hipotecas-nacional` | Hipotecas constituidas de vivienda | INE · HPT (tabla 3200) | mensual |
-| `lanzamientos-ccaa` · `-cronologia` | Lanzamientos (desahucios) | CGPJ | trimestral |
+| `lanzamientos-ccaa` · `-cronologia` · `-causa` · `-causa-ccaa` | Lanzamientos (desahucios), por CCAA y **causa** (hipotecaria / LAU / otras) | CGPJ | trimestral |
 | `viviendas-turisticas-ccaa` | Viviendas de uso turístico | INE · tabla 46141 | anual |
 | `boe-vivienda` | Disposiciones del BOE sobre vivienda (sección I) | BOE | diario |
 | `ipc-vivienda` | IPC residencial: variación anual por componente (grupo 04) | INE · IPC base 2025 (ECOICOP v2) | mensual |
@@ -169,6 +169,14 @@ sale mal, se oye (el fallo va a `logs/` y no solo se ignora).
 - Cada serie del catálogo declara su **fuente, período y n** — y en el panel, el período
   real de cada punto de control.
 - No hay métricas "bonitas": si un agregado no aguanta la auditoría, se retira.
+
+## Citar
+
+- **Ficha de cita**: [`CITATION.cff`](CITATION.cff) (CFF 1.2.0).
+- **DOI (Zenodo)**: pendiente. Para emitirlo: en Zenodo → *Settings → GitHub*, activar el
+  repositorio `mcasrom/vivienda-osint` y publicar un *release* (p. ej. `v0.1.0`); Zenodo
+  acuña un DOI por versión. Luego se añade el DOI a `CITATION.cff` (línea comentada) y a la
+  tabla del README.
 
 ## Licencia
 
