@@ -4,7 +4,7 @@ Estructura: Indicadores · IPV · Alquiler · Mapa de calor provincial · Compar
 Calendario · Registro de medidas · Método y límites. Sin puntuaciones compuestas.
 """
 from __future__ import annotations
-import os, sys, sqlite3, html, json, csv, math
+import os, sys, sqlite3, html, json, csv, math, hashlib
 from datetime import date
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -184,7 +184,8 @@ def _write_dataset(did, titulo, fuente, periodo, licencia, headers, records, dat
                    "licencia": licencia, "columnas": headers, "datos": records},
                   f, ensure_ascii=False, indent=1)
     datasets.append({"id": did, "titulo": titulo, "fuente": fuente,
-                     "periodo": periodo, "licencia": licencia, "n": len(records)})
+                     "periodo": periodo, "licencia": licencia, "n": len(records),
+                     "columnas": list(headers)})
 
 
 def _descarga(did):
@@ -900,6 +901,23 @@ def build():
         json.dump({"observatorio": "Observatorio de la vivienda",
                    "url": "https://vivienda.pruebapublica.com/", "generado": hoy, "series": datasets},
                   f, ensure_ascii=False, indent=1)
+    # datapackage.json (Frictionless Data): recursos con bytes/md5, esquema y licencia
+    _dp_res = []
+    for _d in datasets:
+        _b = open(os.path.join(DATA_DIR, _d["id"] + ".csv"), "rb").read()
+        _dp_res.append({
+            "name": _d["id"], "title": _d["titulo"], "path": "data/" + _d["id"] + ".csv",
+            "format": "csv", "mediatype": "text/csv", "bytes": len(_b),
+            "hash": "md5:" + hashlib.md5(_b).hexdigest(), "n": _d["n"],
+            "sources": [{"title": _d["fuente"]}],
+            "schema": {"fields": [{"name": c} for c in _d.get("columnas", [])]},
+        })
+    with open(os.path.join(DATA_DIR, "datapackage.json"), "w", encoding="utf-8") as f:
+        json.dump({"name": "vivienda-osint", "title": "Observatorio de la vivienda",
+                   "description": "Datos oficiales de vivienda en España (INE, CGPJ, BOE, MIVAU).",
+                   "homepage": "https://vivienda.pruebapublica.com/",
+                   "license": "CC-BY-4.0", "created": hoy, "resources": _dp_res},
+                  f, ensure_ascii=False, indent=1)
     distrib_json = json.dumps(
         [{"@type": "DataDownload", "name": d["titulo"], "encodingFormat": "text/csv",
           "contentUrl": f"https://vivienda.pruebapublica.com/data/{d['id']}.csv"} for d in datasets],
@@ -1120,8 +1138,9 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 <div class="panel"><ul>
 <li>Solo series <b>oficiales</b> con fuente, fecha y periodicidad visibles.</li>
 <li>Precios notariales, registros y alquiler fiscal miden <b>momentos distintos</b>: no se combinan en un mismo gráfico.</li>
-<li>El alquiler se publica solo como <b>índice de variación (IPVA, INE)</b>, no como precio por m²: un índice anual no es un nivel de precio y su último dato disponible es de 2024.</li>
-<li><b>No se publica precio del alquiler por municipio ni por provincia.</b> La muestra de anuncios de que se dispone no permite una cifra defendible, y se prefiere no publicarla antes que publicar un número sin base suficiente.</li>
+<li>El alquiler se publica como <b>(1) índice de variación (IPVA, INE)</b> —no es un precio por m²— y como <b>(2) alquiler de referencia por municipio (SERPAVI/MIVAU)</b>, que es la mediana de los <b>contratos/fianzas</b> (oficial), no el precio de oferta de los portales.</li>
+<li><b>IRAV</b> (Índice de Referencia de Arrendamientos de Vivienda, INE, desde ene-2025): es el <b>índice legal para actualizar la renta</b> de contratos en zonas de mercado tensionado (Ley 12/2023), <b>no un precio</b>. Se cita en el calendario; el INE no lo expone aún en su API de datos, así que no se automatiza (fuente: <a href="https://www.ine.es/dyngs/INEbase/es/operacion.htm?c=Estadistica_C&amp;cid=1254736177110&amp;menu=ultiDatos&amp;idp=1254735976607">INE</a>).</li>
+<li><b>Precio de oferta de alquiler (portales):</b> no se publica. La muestra de anuncios disponible no permite una cifra defendible, y se prefiere no publicarla antes que publicar un número sin base suficiente. (Sí se publica el dato <b>oficial</b> de contratos, SERPAVI/MIVAU.)</li>
 <li><b>Sin puntuaciones compuestas</b> ni atribuciones: «Subiendo/Estable/Bajando» compara el último dato con el anterior de la misma fuente.</li>
 </ul>
 <p class="mut" style="font-size:.82rem">Licencias: <b>INE</b> y datos del observatorio, CC BY 4.0; <b>CGPJ</b> (datos judiciales públicos), <b>BOE</b> y <b>MIVAU/SERPAVI</b>, reutilización citando la fuente. Generado {hoy}.</p></div>

@@ -14,6 +14,9 @@ if ./venv/bin/python tests/test_datos.py --web-dir web_tmp >> logs/test.log 2>&1
     if [ -d web ]; then mv web web.vieja; fi
     mv web_tmp web
     rm -rf web.vieja
+    # historial de cambios de las series (solo tras publicar; no en staging)
+    ./venv/bin/python scripts/changelog.py >> logs/gen.log 2>&1 \
+      || echo "[$(date -u +%F" "%T)] changelog FALLO" >> logs/gen.log
     echo "[$(date -u +%F" "%T)] regen_publicar: publicada (tests OK sobre web_tmp)"
 else
     echo "[$(date -u +%F" "%T)] regen_publicar: tests FALLARON sobre web_tmp — no se publica" >> logs/test.log

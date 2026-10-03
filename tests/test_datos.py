@@ -390,6 +390,25 @@ else:
     if os.path.exists(html_p):
         check('id="hipotecas"' in page, "la portada no incluye la sección de hipotecas constituidas")
 
+# ---------------------------------------------------------------------------
+# 18. Metadatos (datapackage.json) + historial de cambios (changelog.json)
+# ---------------------------------------------------------------------------
+_pdp = os.path.join(WEB, "data", "datapackage.json")
+if not os.path.exists(_pdp):
+    OMITIDO.append("web/data/datapackage.json (generado)")
+else:
+    try:
+        _dp = json.load(open(_pdp, encoding="utf-8"))
+        check(bool(_dp.get("resources")), "datapackage.json sin recursos")
+        for _r in _dp.get("resources", []):
+            check(all(k in _r for k in ("name", "path", "hash", "schema")),
+                  f"datapackage.json: recurso incompleto {_r.get('name')!r}")
+    except ValueError as _e:
+        FALLOS.append(f"datapackage.json no es JSON válido: {_e}")
+_pch = os.path.join(WEB, "data", "changelog.json")
+if not os.path.exists(_pch):
+    OMITIDO.append("web/data/changelog.json (lo escribe regen_publicar.sh)")
+
 if FALLOS:
     print(f"FALLOS ({len(FALLOS)}):", file=sys.stderr)
     for f in FALLOS:
