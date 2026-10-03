@@ -551,7 +551,19 @@ def svg_multiline(series, w=780, h=270, fmt=None, ticks_n=5):
     return "".join(out)
 
 
+_SLUG_FIX = {
+    "Madrid, Comunidad de": "madrid",
+    "Murcia, Región de": "murcia",
+    "Asturias, Principado de": "asturias",
+    "Navarra, Comunidad Foral de": "navarra",
+    "Balears, Illes": "baleares",
+    "Rioja, La": "la-rioja",
+}
+
+
 def _slug(s):
+    if s in _SLUG_FIX:
+        return _SLUG_FIX[s]
     import unicodedata
     s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode()
     import re as _re
