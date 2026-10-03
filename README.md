@@ -125,8 +125,7 @@ Reglas:
 
 Tres capas de test, ejecutadas **antes de publicar y de pushear** por el **hook local
 `scripts/pre-push`** (y por la puerta de staging del cron, `regen_publicar.sh`) — **no
-dependen de GitHub Actions**, que está deshabilitado a nivel de cuenta. El workflow
-`.github/workflows/tests.yml` queda solo como `workflow_dispatch` (manual).
+dependen de GitHub Actions**, que está deshabilitado a nivel de cuenta. El workflow de GitHub queda **desactivado** (`.github/workflows/tests.yml.disabled`) hasta que se habilite Actions/billing.
 
 - `tests/test_datos.py` — contratos de datos **sin dependencias**: vocabulario de
   estados, consistencia de fechas (aprobación < BOE ≤ vigencia), nombres de CCAA
