@@ -485,6 +485,22 @@ else:
     if os.path.exists(html_p):
         check('id="dicen"' in page, "la portada no incluye 'Se dice / dicen los datos'")
 
+# ---------------------------------------------------------------------------
+# 23. botones de compartir (X/Mastodon/Bluesky/copiar) + suplemento gráfico CCAA
+# ---------------------------------------------------------------------------
+if os.path.exists(html_p):
+    check("Copiar enlace" in page, "la portada no tiene botón de copiar enlace")
+    check("x.com/intent/post" in page, "la portada no tiene enlace de X")
+    check("mastodon.social/share" in page and "bsky.app/intent/compose" in page,
+          "la portada no tiene enlaces de Mastodon/Bluesky")
+if os.path.isdir(_ccdir):
+    _mp = os.path.join(_ccdir, "murcia.html")
+    if os.path.exists(_mp):
+        _mh = open(_mp, encoding="utf-8").read()
+        check("Copiar enlace" in _mh, "las páginas de CCAA no tienen botón de compartir")
+        check("Suplemento gráfico" in _mh, "las páginas de CCAA no tienen suplemento gráfico")
+        check("<svg" in _mh, "el suplemento gráfico de CCAA no es un SVG")
+
 if FALLOS:
     print(f"FALLOS ({len(FALLOS)}):", file=sys.stderr)
     for f in FALLOS:

@@ -249,6 +249,9 @@ table{width:100%;border-collapse:collapse;font-size:.88rem} th{text-align:left;p
 code{background:#f1f5f9;padding:1px 4px;border-radius:4px}
 .box{margin:12px 0;padding:12px 16px;background:#fffbeb;border-left:4px solid #d97706;border-radius:6px;font-size:.88rem}
 footer{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;color:var(--mut)} footer a{color:var(--accent)}
+.share{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:.82rem;margin-top:14px}
+.share a,.share button{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink);text-decoration:none;font-size:.8rem;font-weight:600;cursor:pointer;font-family:inherit}
+.share a:hover,.share button:hover{border-color:var(--accent);color:var(--accent)}
 """
 
 
@@ -577,7 +580,71 @@ def _slug(s):
     return _re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")
 
 
-def _ccaa_page(nom, d):
+def _share(url, texto):
+    from urllib.parse import quote
+    t = quote(texto)
+    u = quote(url, safe="")
+    tu = quote(texto + " " + url)
+    return (
+        '<div class="share"><span class="mut">Compartir:</span>'
+        f'<a href="https://x.com/intent/post?text={t}&url={u}" target="_blank" rel="noopener" '
+        f'aria-label="Compartir en X">X</a>'
+        f'<a href="https://mastodon.social/share?text={tu}" target="_blank" rel="noopener">Mastodon</a>'
+        f'<a href="https://bsky.app/intent/compose?text={tu}" target="_blank" rel="noopener">Bluesky</a>'
+        f'<button type="button" data-url="{E(url)}" onclick="var b=this;'
+        f'navigator.clipboard&amp;&amp;navigator.clipboard.writeText(b.dataset.url).then(function()'
+        f'{{b.textContent=\'Copiado ✓\'}})">Copiar enlace</button>'
+        '</div>')
+
+
+def _perfil_svg(nom, d, all_d):
+    inds = [
+        ("IPV · variación anual", "ipv", " %"),
+        ("VUT · % del parque", "vut_pct", " %"),
+        ("Compraventas / 1.000 viviendas", "cv_rate", ""),
+        ("Lanzamientos / 1.000 viviendas", "lz_rate", ""),
+        ("Ejecuciones / 1.000 viviendas", "eh_rate", ""),
+    ]
+
+    def esc(v):
+        return "—" if v is None else f"{v:.1f}".replace(".", ",")
+
+    w, rowh = 780, 48
+    h = 24 + rowh * len(inds) + 26
+    x0, x1 = 262, w - 78
+    out = [f'<svg viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg" style="width:100%" '
+           f'role="img" aria-label="Perfil de {E(nom)} frente a las CCAA">']
+    for i, (lab, key, unit) in enumerate(inds):
+        vals = [dd.get(key) for _c, _n, dd in all_d if dd.get(key) is not None]
+        if not vals:
+            continue
+        v = d.get(key)
+        lo, hi = min(vals), max(vals)
+        med = sorted(vals)[len(vals) // 2]
+        y = 24 + i * rowh
+
+        def px(val):
+            return x0 + (val - lo) / (hi - lo) * (x1 - x0) if hi > lo else (x0 + x1) / 2
+
+        out.append(f'<text x="0" y="{y+4}" font-size="12.5" fill="#0f172a" font-weight="600">{E(lab)}</text>')
+        out.append(f'<line x1="{x0}" y1="{y}" x2="{x1}" y2="{y}" stroke="#e2e8f0" stroke-width="6" stroke-linecap="round"/>')
+        out.append(f'<text x="{x0}" y="{y+19}" font-size="9.5" fill="#94a3b8" text-anchor="middle">{esc(lo)}{unit}</text>')
+        out.append(f'<text x="{x1}" y="{y+19}" font-size="9.5" fill="#94a3b8" text-anchor="middle">{esc(hi)}{unit}</text>')
+        mxp = px(med)
+        out.append(f'<line x1="{mxp:.0f}" y1="{y-10}" x2="{mxp:.0f}" y2="{y+10}" stroke="#94a3b8" '
+                   f'stroke-width="1.5" stroke-dasharray="3,2"/>')
+        if v is not None:
+            rp = px(v)
+            out.append(f'<circle cx="{rp:.0f}" cy="{y}" r="6.5" fill="#0f766e"/>')
+            out.append(f'<text x="{rp:.0f}" y="{y-12}" font-size="11.5" fill="#0f766e" font-weight="800" '
+                       f'text-anchor="middle">{esc(v)}{unit}</text>')
+    out.append(f'<text x="0" y="{h-6}" font-size="10.5" fill="#64748b">'
+               f'● {E(nom)}   ┄ mediana de las CCAA   extremos: mínimo–máximo entre CCAA</text>')
+    out.append("</svg>")
+    return "".join(out)
+
+
+def _ccaa_page(nom, d, all_d):
     def _pctv(v):
         return f"{v:,.1f}".replace(",", "X").replace(".", ",").replace("X", ".") + " %"
     def _int(v):
@@ -600,7 +667,15 @@ def _ccaa_page(nom, d):
             f'<tbody>{filas}</tbody></table>'
             f'<p class="mut" style="font-size:.78rem;margin:10px 0 0">Datos oficiales. Las tasas usan como denominador '
             f'el total de viviendas (derivado del % VUT del INE). Ver <a href="/metodo.html">método</a> y '
-            f'<a href="/">panel general</a>.</p></div>')
+            f'<a href="/">panel general</a>.</p>'
+            f'{_share(f"https://vivienda.pruebapublica.com/ccaa/{_slug(nom)}.html", f"Datos oficiales de vivienda de {nom} (INE, CGPJ, MIVAU), con fuente y periodo.")}'
+            f'</div>'
+            f'<h2>Suplemento gráfico <span>· {E(nom)} frente a las CCAA</span></h2><div class="panel">'
+            f'{_perfil_svg(nom, d, all_d)}'
+            f'<p class="mut" style="font-size:.78rem;margin:10px 0 0">Cada fila sitúa a {E(nom)} (punto verde) '
+            f'frente al conjunto de las CCAA en un indicador <b>comparable</b> (no depende del tamaño): la línea '
+            f'gris es el rango mínimo–máximo entre CCAA y la marca discontinua, la mediana. Compraventas, '
+            f'lanzamientos y ejecuciones por 1.000 viviendas; IPV y VUT en %.</p></div>')
     return _shell(f"{nom} — datos de vivienda", f"Datos oficiales de vivienda en {nom}: compraventas, lanzamientos, "
                   f"ejecuciones, viviendas turísticas, precios y tasas. INE/CGPJ/MIVAU.",
                   f"https://vivienda.pruebapublica.com/ccaa/{_slug(nom)}.html",
@@ -1122,6 +1197,10 @@ def build():
 
     _ccaa_links = " · ".join(f'<a href="/ccaa/{_slug(_n)}.html">{E(_n)}</a>'
                              for _c, _n in territorios.NOMBRE.items())
+    _share_home = _share(
+        "https://vivienda.pruebapublica.com/",
+        "Datos oficiales de vivienda en España, con fuente y periodo: precio, compraventas, "
+        "alquiler, lanzamientos, ejecuciones y viviendas turísticas.")
     doc = f"""<!doctype html><html lang="es"><head><meta charset="utf-8">
 <meta name="google-site-verification" content="mlyuKtDMOhZ2x2lMrqr-MHT9LeUW8i6uEJw1Sv6AzNY">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -1173,6 +1252,9 @@ table{{width:100%;border-collapse:collapse;font-size:.88rem}} th{{text-align:lef
 .m{{padding:7px 0;border-bottom:1px solid var(--line);font-size:.88rem}} .m .d{{display:inline-block;min-width:96px;color:var(--mut);font-variant-numeric:tabular-nums}} .m .src{{color:var(--accent);text-decoration:none;font-size:.78rem}}
 footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;color:var(--mut)}} footer a{{color:var(--accent)}}
 @media(max-width:820px){{.inds{{grid-template-columns:repeat(2,1fr)}} .grid{{grid-template-columns:1fr}}}}
+.share{{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:.82rem}}
+.share a,.share button{{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink);text-decoration:none;font-size:.8rem;font-weight:600;cursor:pointer;font-family:inherit}}
+.share a:hover,.share button:hover{{border-color:var(--accent);color:var(--accent)}}
 </style></head><body>
 <nav class="nav"><div class="in"><b>🏠 Observatorio de la vivienda</b>
 <a href="#indicadores">Indicadores</a><a href="#inflacion">Inflación</a><a href="#comparador">Comparador</a><a href="#dicen">Se dice</a><a href="#calendario">Calendario</a><a href="#medidas">Medidas</a><a href="#zmrt">Zonas</a><a href="#metodo">Método</a><a href="#apoyar">Apoyar</a><a href="/fuentes.html">Fuentes</a><a href="/propiedad.html">Propiedad</a><a href="/datos.html">Datos</a><a href="/ccaa/">CCAA</a>
@@ -1181,6 +1263,7 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 <h1>Qué dicen los datos oficiales de vivienda, sin puntuaciones ni atribuciones</h1>
 <p>Cada cifra lleva su unidad, su fuente y su fecha. Las medidas políticas se anotan sobre las series, pero el observatorio <b>no afirma</b> que una medida causara un cambio.</p>
 </div></header>
+<div class="wrap" style="max-width:1060px;margin:0 auto;padding:0 20px">{_share_home}</div>
 <div class="inds" id="indicadores">{inds}</div>
 <main>
 <div class="panel" id="estado" style="margin-bottom:8px">
@@ -1332,18 +1415,23 @@ sel.addEventListener('change',upd);
     # páginas por CCAA + índice
     _cvd = {k: v for k, v in cv}
     _vtd = {k: v for k, v in vut}
+    _vpc = ine.vte_pct_ccaa()
     _tasd = {c: (l, e) for c, l, e in _tasas}
     _ccaa_pages = []
     for _cod, _nom in territorios.NOMBRE.items():
-        _d = {"cv": _cvd.get(_nom), "lz": _lz_d.get(_nom), "eh": _eh_d.get(_nom), "vut": _vtd.get(_nom),
+        _tot = _total_viv.get(_nom)
+        _cvv = _cvd.get(_nom)
+        _d = {"cv": _cvv, "lz": _lz_d.get(_nom), "eh": _eh_d.get(_nom), "vut": _vtd.get(_nom),
               "ipv": ine.ultimo(f"ipv_var_anual:{_cod}"), "lz_rate": _tasd.get(_nom, (None, None))[0],
-              "eh_rate": _tasd.get(_nom, (None, None))[1], "per_cv": per_cv, "per_lz": per_lz,
+              "eh_rate": _tasd.get(_nom, (None, None))[1], "vut_pct": _vpc.get(_nom),
+              "cv_rate": (round(_cvv / _tot * 1000, 1) if (_cvv and _tot) else None),
+              "per_cv": per_cv, "per_lz": per_lz,
               "per_eh": per_eh, "per_vut": per_vut, "per_ipv": per_ipv}
         _ccaa_pages.append((_cod, _nom, _d))
     os.makedirs(os.path.join(OUT_DIR, "ccaa"), exist_ok=True)
     for _cod, _nom, _d in _ccaa_pages:
         with open(os.path.join(OUT_DIR, "ccaa", _slug(_nom) + ".html"), "w", encoding="utf-8") as f:
-            f.write(_ccaa_page(_nom, _d))
+            f.write(_ccaa_page(_nom, _d, _ccaa_pages))
     with open(os.path.join(OUT_DIR, "ccaa", "index.html"), "w", encoding="utf-8") as f:
         f.write(_ccaa_index(_ccaa_pages))
     # RSS de cambios (normas + cambios de series)
