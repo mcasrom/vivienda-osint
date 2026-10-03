@@ -109,8 +109,8 @@ web/             salida (ignorada en git, regenerada por el build)
   10740 (ejecuciones), 46141 (viviendas turísticas).
 - **INE · Atlas de Distribución de Renta de los Hogares (ADRH)** — renta neta media por
   hogar y por persona, por municipio (descarga CSV por tabla; el mapa provincia→tabla se
-  cachea en `data/adrh_tablas.json`). Es dato **anual**: se ingiere aparte
-  (`venv/bin/python -m ingest.renta`), no en el cron diario.
+  cachea en `data/adrh_tablas.json`). Dato **anual**: se ingiere aparte con **cron mensual**
+  (día 1 a las 05:00 → `venv/bin/python -m ingest.renta`); lo publica el daily de las 06:15.
 - **MIVAU · SERPAVI** — alquiler de referencia por municipio (mediana de contratos/fianzas).
 - **CGPJ** — lanzamientos por CCAA, cronología nacional y **desglose por causa**.
 - **BOE** — sumario diario (sección I), de donde también se leen los títulos oficiales
