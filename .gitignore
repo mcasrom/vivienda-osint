@@ -22,3 +22,5 @@ web/mapa.html
 web/ccaa/
 web/cambios.xml
 web/llms.txt
+data/dataset_hashes.json
+data/historial.json
