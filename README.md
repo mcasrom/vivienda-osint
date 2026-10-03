@@ -71,6 +71,8 @@ Todo se descarga desde [/datos.html](https://vivienda.pruebapublica.com/datos.ht
 - `web/data/latest.json` — el último dato de cada indicador, para consumidores ligeros
   (incluye, por indicador, `actualizado` y `edad_dias`: de cuándo es nuestra última incorporación).
 - `web/data/index.json` — catálogo con fuente, período, licencia y **n** por serie.
+- `web/data/datapackage.json` — descriptor **Frictionless Data**: por serie, `bytes`, `md5`, esquema de columnas y fuente.
+- `web/data/changelog.json` — **historial de cambios** (md5 por serie; auditable, solo registra cuando cambia).
 - `web/llms.txt` — guía para asistentes de IA.
 - JSON-LD `Dataset` con `distribution`/`DataDownload` por serie en la portada.
 
