@@ -9,6 +9,7 @@ echo "[$(date -u +%F" "%T)] regen_publicar: inicio"
 rm -rf web_tmp
 ./venv/bin/python gen/gen_vivienda.py --out web_tmp >> logs/gen.log 2>&1
 /usr/bin/python3 gen/gen_og.py --out web_tmp >> logs/gen.log 2>&1
+/usr/bin/python3 gen/gen_cards.py --out web_tmp >> logs/gen.log 2>&1 || echo "[regen] aviso: gen_cards fallo" >> logs/gen.log
 if ./venv/bin/python tests/test_datos.py --web-dir web_tmp >> logs/test.log 2>&1; then
     # puerta superada: intercambio. Salvo fallo extremo (mv), quedamos con la buena.
     if [ -d web ]; then mv web web.vieja; fi

@@ -449,6 +449,23 @@ if os.path.exists(_rss):
 else:
     OMITIDO.append("web/cambios.xml")
 
+# ---------------------------------------------------------------------------
+# 21. tarjetas por indicador (web/og/cards.json) para RRSS
+# ---------------------------------------------------------------------------
+_cardsf = os.path.join(WEB, "og", "cards.json")
+if os.path.exists(_cardsf):
+    try:
+        _cd = json.load(open(_cardsf, encoding="utf-8"))
+        _cc = _cd.get("cards", [])
+        check(len(_cc) >= 6, f"pocas tarjetas por indicador: {len(_cc)}")
+        for _c in _cc:
+            check(_c.get("x_len", 999) <= 280, f"texto de X demasiado largo en {_c.get('slug')}: {_c.get('x_len')}")
+            check(os.path.exists(os.path.join(WEB, _c["img"].lstrip("/"))), f"falta imagen {_c['img']}")
+    except ValueError as _e:
+        FALLOS.append(f"cards.json no es JSON válido: {_e}")
+else:
+    OMITIDO.append("web/og/cards.json")
+
 if FALLOS:
     print(f"FALLOS ({len(FALLOS)}):", file=sys.stderr)
     for f in FALLOS:
