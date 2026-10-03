@@ -18,7 +18,7 @@ license: AGPL-3.0-or-later
 license-url: "https://www.gnu.org/licenses/agpl-3.0.html"
 repository-code: "https://github.com/mcasrom/vivienda-osint"
 url: "https://vivienda.pruebapublica.com"
-version: "0.1.0"
+version: "0.1.1"
 date-released: "2026-10-03"
 keywords:
   - vivienda

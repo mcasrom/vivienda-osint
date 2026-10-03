@@ -1,6 +1,6 @@
 # Registro de cambios · vivienda-osint
 
-## [Sin publicar] — 2026-10-03
+## [0.1.1] — 2026-10-03
 - **`status.json` público** (`web/data/status.json`): estado operativo por fuente — última OK,
   último intento, `edad_dias`, nº de **filas** y `sha256` de su serie. Amplía el bloque «Estado
   de datos» (transparencia/auditoría).
