@@ -50,7 +50,7 @@ verificar.
 
 ## Qué publica (datos abiertos, CSV + JSON)
 
-Además del catálogo, la portada incluye secciones de contexto regulatorio: **normas del BOE** (ficha por norma, con estado y fechas) y **zonas de mercado residencial tensionado** (Ley 12/2023 art. 18: CCAA que las han declarado, con fuente BOE/MIVAU).
+Además del catálogo, la portada incluye secciones de contexto regulatorio: **normas del BOE** (ficha por norma, con estado y fechas) y **zonas de mercado residencial tensionado** (Ley 12/2023 art. 18: CCAA que las han declarado, con fuente BOE/MIVAU). El sitio genera además **una página por comunidad autónoma** (`/ccaa/`) y un **feed RSS de cambios** de normas y series (`/cambios.xml`).
 
 
 | Serie | Qué mide | Fuente | Periocidad |
