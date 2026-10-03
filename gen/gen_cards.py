@@ -9,8 +9,10 @@ aquel, comprueba que no hay solapes ni desbordes antes de aceptar la tarjeta.
 """
 from __future__ import annotations
 import os
+import re
 import sys
 import json
+import textwrap
 from datetime import date
 
 import numpy as np
@@ -133,6 +135,59 @@ def _card(out_path, c):
     plt.close(fig)
 
 
+def _dicen_items():
+    try:
+        with open(os.path.join(ROOT, "data", "dicen.json"), encoding="utf-8") as f:
+            return json.load(f).get("items", [])
+    except (OSError, ValueError):
+        return []
+
+
+def _texto_dicen(it):
+    url = f"https://{SITE}/#dicen"
+    frase = it["se_dice"]
+    masto = (f"{frase}\n\nDicen los datos: {it['valor']} {it['valor_txt']} ({it['fuente']}).\n\n"
+             f"Más: {url}\n#vivienda #datosabiertos")
+    x_txt = f"{frase} Dicen los datos: {it['valor']} {it['valor_txt']} ({it['fuente']}). {url}"
+    x_len = len(x_txt) - len(url) + X_LINK
+    return masto, x_txt, x_len
+
+
+def _dicen_card(out_path, it):
+    fig = plt.figure(figsize=(12, 6.3), dpi=100)
+    ax = fig.add_axes([0, 0, 1, 1]); ax.axis("off")
+    ax.imshow(np.linspace(0, 1, 256).reshape(1, -1), extent=[0, 1, 0, 1], aspect="auto",
+              cmap=LinearSegmentedColormap.from_list("b", ["#0b3b4a", "#0e7490", "#0ea5b7"]),
+              origin="lower", zorder=0)
+    ax.fill([0.6, 1.02, 1.02, 0.7], [0, 0, 1.05, 1.05], color="#ffffff", alpha=0.05, zorder=1)
+    ax.text(0.045, 0.93, "OBSERVATORIO DE LA VIVIENDA", color="#67e8f9", fontsize=15, fontweight="bold", zorder=5)
+    ax.plot([0.045, 0.955], [0.868, 0.868], color="#ffffff", alpha=0.25, lw=1.2, zorder=5)
+    ax.text(0.045, 0.80, "SE DICE", color="#f87171", fontsize=15, fontweight="bold", zorder=5)
+    t1 = ax.text(0.045, 0.735, textwrap.fill(it["se_dice"].strip("«»").strip(), 46),
+                 color="#e5e7eb", fontsize=25, style="italic", va="top", zorder=5)
+    ax.text(0.045, 0.49, "DICEN LOS DATOS", color="#67e8f9", fontsize=15, fontweight="bold", zorder=5)
+    val = it["valor"]
+    fsv = 84 if len(val) <= 5 else (66 if len(val) <= 7 else 56)
+    t2 = ax.text(0.045, 0.43, val, color="#fbbf24", fontsize=fsv, fontweight="bold", va="top", zorder=5)
+    t3 = ax.text(0.047, 0.175, textwrap.fill(f"{it['valor_txt']} · {it['fuente']}", 82),
+                 color="#a5f3fc", fontsize=18, va="top", zorder=5)
+    ax.text(0.045, 0.055, SITE, color="#fde047", fontsize=18, fontweight="bold", zorder=5)
+    texts = [t1, t2, t3]
+    fig.canvas.draw(); r = fig.canvas.get_renderer()
+    W = fig.get_size_inches()[0] * fig.dpi
+    H = fig.get_size_inches()[1] * fig.dpi
+    for i, a in enumerate(texts):
+        for b in texts[i + 1:]:
+            if a.get_window_extent(r).overlaps(b.get_window_extent(r)):
+                raise SystemExit(f"card dicen-{it['id']}: solape «{a.get_text()}» / «{b.get_text()}»")
+    for a in texts:
+        bb = a.get_window_extent(r)
+        if bb.x1 > W or bb.x0 < 0 or bb.y1 > H or bb.y0 < 0:
+            raise SystemExit(f"card dicen-{it['id']}: texto fuera de lienzo «{a.get_text()}»")
+    fig.savefig(out_path, facecolor="#0b3b4a")
+    plt.close(fig)
+
+
 def build(out_dir=OUT_DEF):
     od = os.path.join(ROOT, out_dir, "og")
     os.makedirs(od, exist_ok=True)
@@ -144,6 +199,13 @@ def build(out_dir=OUT_DEF):
                       "value": c["num"],
                       "label": c["label"], "source": c["source"],
                       "mastodon": masto, "x": x_txt, "x_len": x_len})
+    for it in _dicen_items():
+        slug = "dicen-" + it["id"]
+        _dicen_card(os.path.join(od, slug + ".png"), it)
+        masto, x_txt, x_len = _texto_dicen(it)
+        cards.append({"slug": slug, "img": f"/og/{slug}.png", "kicker": "SE DICE / DICEN LOS DATOS",
+                      "value": it["valor"], "label": it["valor_txt"], "source": it["fuente"],
+                      "se_dice": it["se_dice"], "mastodon": masto, "x": x_txt, "x_len": x_len})
     man = {"generado": date.today().isoformat(), "sitio": SITE, "cards": cards}
     with open(os.path.join(od, "cards.json"), "w", encoding="utf-8") as f:
         json.dump(man, f, ensure_ascii=False, indent=1)
