@@ -538,6 +538,48 @@ else:
         check(os.path.exists(os.path.join(WEB, "data", "lanzamientos-causa.json")),
               "falta el dataset lanzamientos-causa.json")
 
+# ---------------------------------------------------------------------------
+# 26. σ-quarantine: saltos anómalos en las series nacionales (z robusto, MAD) +
+#     periodos duplicados. Bloquea la publicación ante un atípico fuerte (posible
+#     rotura de formato/unidad); avisa (sin bloquear) ante uno moderado.
+# ---------------------------------------------------------------------------
+_SERIES = {}
+try:
+    from ingest import ine as _ine, cgpj as _cgpj  # noqa: E402
+    _SERIES = {
+        "ipv (var. anual %)": _ine.serie("ipv_var_anual"),
+        "ipva (var. anual %)": _ine.serie("ipva_var_anual"),
+        "ejecuciones (nacional)": _ine.eh_nacional(),
+        "compraventas (nacional)": _ine.cv_nacional(),
+        "hipotecas (nacional)": _ine.hpt_serie(),
+        "lanzamientos (nacional)": _cgpj.cronologia(),
+    }
+except Exception as _e:  # noqa: BLE001
+    OMITIDO.append(f"σ-quarantine (no se pudieron leer series: {_e})")
+# umbral absoluto mínimo por serie (evita marcar ruido en series planas)
+_ABS = {"ipv (var. anual %)": 2.0, "ipva (var. anual %)": 2.0,
+        "ejecuciones (nacional)": 3000.0, "compraventas (nacional)": 100000.0,
+        "hipotecas (nacional)": 10000.0, "lanzamientos (nacional)": 2000.0}
+if _SERIES:
+    import statistics as _st
+    for _nom, _s in _SERIES.items():
+        _s = [(p, v) for p, v in _s if v is not None]
+        _per = [p for p, _ in _s]
+        _vals = [float(v) for _, v in _s]
+        if len(_per) != len(set(_per)):
+            check(False, f"{_nom}: periodos duplicados en la serie (rotura de formato)")
+        if len(_vals) < 6:
+            continue
+        _d = [abs(_vals[i] - _vals[i - 1]) for i in range(1, len(_vals))]
+        _med = _st.median(_d)
+        _mad = _st.median([abs(x - _med) for x in _d]) or 1e-9
+        _z = 0.6745 * (_d[-1] - _med) / _mad
+        _floor = _ABS.get(_nom, 0.0)
+        if _z > 5 and _d[-1] > _floor:
+            check(False, f"{_nom}: salto anómalo {_d[-1]:.1f} (z={_z:.1f}) — cuarentena, no publicar")
+        elif _z > 3.5 and _d[-1] > _floor:
+            print(f"test_datos: AVISO {_nom}: salto atípico {_d[-1]:.1f} (z={_z:.1f}) — revisar")
+
 if FALLOS:
     print(f"FALLOS ({len(FALLOS)}):", file=sys.stderr)
     for f in FALLOS:

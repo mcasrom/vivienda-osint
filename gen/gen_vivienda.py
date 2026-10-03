@@ -1269,6 +1269,39 @@ def build():
                    "homepage": "https://vivienda.pruebapublica.com/",
                    "license": "CC-BY-4.0", "created": hoy, "resources": _dp_res},
                   f, ensure_ascii=False, indent=1)
+    # status.json (A1): estado operativo por fuente con nº de filas y huella del dato publicado.
+    _src_ds = {"ine": "precios-ipv", "ipc": "ipc-vivienda", "cgpj": "lanzamientos-cronologia",
+               "boe": "boe-vivienda", "serpavi": "alquiler-serpavi"}
+    _src_tabla = {"ine": "ine_serie", "ipc": "ipc_serie", "cgpj": "lanzamientos",
+                  "boe": "boe", "serpavi": "serpavi"}
+    try:
+        _sc = sqlite3.connect(f"file:{boeing.DB}?mode=ro", uri=True)
+    except sqlite3.Error:
+        _sc = None
+    _status = {"observatorio": "Observatorio de la vivienda", "sitio": "vivienda.pruebapublica.com",
+               "generado": hoy, "fuentes": {}}
+    for _k in ("ine", "ipc", "serpavi", "cgpj", "boe"):
+        _e = est.get(_k, {}) or {}
+        _filas = None
+        if _sc is not None and _k in _src_tabla:
+            try:
+                _filas = _sc.execute("SELECT COUNT(*) FROM " + _src_tabla[_k]).fetchone()[0]
+            except sqlite3.Error:
+                _filas = None
+        _did = _src_ds.get(_k)
+        _sha = None
+        if _did:
+            _p = os.path.join(DATA_DIR, _did + ".csv")
+            if os.path.exists(_p):
+                _sha = hashlib.sha256(open(_p, "rb").read()).hexdigest()[:16]
+        _status["fuentes"][_k] = {"nombre": _e.get("nombre", _k.upper()), "ok": _e.get("ok"),
+                                  "actualizado": _e.get("actualizado"), "ultima_ok": _e.get("ultima_ok"),
+                                  "ultimo_intento": _e.get("ts"), "edad_dias": _e.get("edad_dias"),
+                                  "ref": _e.get("ref"), "detalle": _e.get("detalle") or "",
+                                  "filas": _filas, "serie": _did, "sha256": _sha}
+    with open(os.path.join(DATA_DIR, "status.json"), "w", encoding="utf-8") as f:
+        json.dump(_status, f, ensure_ascii=False, indent=1)
+
     distrib_json = json.dumps(
         [{"@type": "DataDownload", "name": d["titulo"], "encodingFormat": "text/csv",
           "contentUrl": f"https://vivienda.pruebapublica.com/data/{d['id']}.csv"} for d in datasets],

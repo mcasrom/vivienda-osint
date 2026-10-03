@@ -169,6 +169,11 @@ sale mal, se oye (el fallo va a `logs/` y no solo se ignora).
 - Cada serie del catálogo declara su **fuente, período y n** — y en el panel, el período
   real de cada punto de control.
 - No hay métricas "bonitas": si un agregado no aguanta la auditoría, se retira.
+- **`/data/status.json`**: estado operativo por fuente (última OK, último intento, nº de
+  filas y `sha256` de su serie), ampliando el bloque «Estado de datos».
+- **σ-quarantine antes de publicar**: un salto anómalo (z robusto > 5 sobre las diferencias
+  de la serie) o **periodos duplicados** **bloquean** la publicación y avisan; los atípicos
+  moderados (z > 3.5) solo se registran. Evita publicar una cifra rota por un cambio de formato.
 
 ## Citar
 

@@ -1,6 +1,14 @@
 # Registro de cambios · vivienda-osint
 
 ## [Sin publicar] — 2026-10-03
+- **`status.json` público** (`web/data/status.json`): estado operativo por fuente — última OK,
+  último intento, `edad_dias`, nº de **filas** y `sha256` de su serie. Amplía el bloque «Estado
+  de datos» (transparencia/auditoría).
+- **σ-quarantine pre-publicación** (`test_datos` §26): un salto **anómalo** (z robusto con MAD
+  > 5 sobre las diferencias de la serie nacional) o **periodos duplicados** **bloquean** la
+  publicación (la web conserva la última versión buena y avisa por Telegram); los atípicos
+  moderados (z > 3.5) se registran. Umbrales calibrados sobre los datos reales (los z actuales
+  son < 1).
 - **Lanzamientos (desahucios) por causa**: el Excel del CGPJ desglosa los lanzamientos
   practicados en **ejecución hipotecaria + LAU + otras**. Se ingestan las tres hojas
   (`ingest/cgpj.py`, tabla `lanzamientos_causa`), se publica un bloque **«Desglose por causa»**
