@@ -6,7 +6,7 @@
 
 [![Licencia](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/badge/dynamic/json?url=https://api.github.com/repos/mcasrom/vivienda-osint/releases/latest&label=release&query=$.tag_name)](https://github.com/mcasrom/vivienda-osint/releases)
-[![Tests](https://img.shields.io/github/actions/workflow/status/mcasrom/vivienda-osint/tests.yml?label=CI%20tests)](https://github.com/mcasrom/vivienda-osint/actions)
+[![Tests](https://img.shields.io/badge/tests-pre--push%20(local)-blue)](https://github.com/mcasrom/vivienda-osint/blob/master/scripts/pre-push)
 
 [Panel en vivo](https://vivienda.pruebapublica.com/) ·
 [Catálogo de datos](https://vivienda.pruebapublica.com/datos.html) ·
@@ -121,9 +121,12 @@ Reglas:
   o derogación) y **regenera solo** por la puerta de staging —protegida por `test_datos`—,
   además de avisar por Telegram. No es «decidir»: es transcribir un hecho oficial con fuente.
 
-## Calidad: contratos y CI
+## Calidad: contratos y tests
 
-Tres capas de test, todos ejecutados en CI (`.github/workflows/tests.yml`):
+Tres capas de test, ejecutadas **antes de publicar y de pushear** por el **hook local
+`scripts/pre-push`** (y por la puerta de staging del cron, `regen_publicar.sh`) — **no
+dependen de GitHub Actions**, que está deshabilitado a nivel de cuenta. El workflow
+`.github/workflows/tests.yml` queda solo como `workflow_dispatch` (manual).
 
 - `tests/test_datos.py` — contratos de datos **sin dependencias**: vocabulario de
   estados, consistencia de fechas (aprobación < BOE ≤ vigencia), nombres de CCAA
