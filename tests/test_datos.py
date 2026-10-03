@@ -501,6 +501,15 @@ if os.path.isdir(_ccdir):
         check("Suplemento gráfico" in _mh, "las páginas de CCAA no tienen suplemento gráfico")
         check("<svg" in _mh, "el suplemento gráfico de CCAA no es un SVG")
 
+# ---------------------------------------------------------------------------
+# 24. mapa coroplético por CCAA (si hay geo)
+# ---------------------------------------------------------------------------
+_mapf = os.path.join(WEB, "mapa.html")
+if os.path.exists(_mapf):
+    _maph = open(_mapf, encoding="utf-8").read()
+    check(_maph.count('class="ccaa"') >= 15, "el mapa tiene muy pocas CCAA")
+    check('id="msel"' in _maph and "mapsvg" in _maph, "el mapa no tiene selector/svg")
+
 if FALLOS:
     print(f"FALLOS ({len(FALLOS)}):", file=sys.stderr)
     for f in FALLOS:

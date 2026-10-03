@@ -48,6 +48,10 @@ try:
         DICEN = json.load(_fh)
 except (OSError, ValueError):
     DICEN = {}
+# Fronteras de las CCAA para el coroplético (geo, fuera de git: data/*.geojson).
+# Origen: geometrías de CCAA de España usadas por el resto de servicios; si falta,
+# el mapa se omite sin romper la generación.
+MAP_GEO = os.path.join(ROOT, "data", "spain-ccaa.geojson")
 ESTADO_TXT = {
     "publicada": "Publicada",
     "en_votacion": "Pendiente de convalidación o derogación",
@@ -262,6 +266,7 @@ def _shell(titulo, desc, canonical, h1, intro, body, active=""):
     nav = ('<nav class="nav"><div class="in"><b>🏠 Observatorio de la vivienda</b>'
            + na("/", "Observatorio") + na("/fuentes.html", "Fuentes") + na("/propiedad.html", "Propiedad")
            + na("/datos.html", "Datos")
+           + na("/mapa.html", "Mapa")
            + '<a href="https://pruebapublica.com" style="opacity:.7">pruebapublica.com</a></div></nav>')
     return f"""<!doctype html><html lang="es"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -717,6 +722,115 @@ def _cambios_xml(normas, hist, hoy):
                    f'<pubDate>{E(f)}T00:00:00Z</pubDate><description>{E(d)}</description></item>')
     out.append('</channel></rss>')
     return "\n".join(out)
+
+
+def _dp(pts, eps):
+    if len(pts) < 3:
+        return pts
+    (x1, y1), (x2, y2) = pts[0], pts[-1]
+    dmax, idx = 0.0, 0
+    for i in range(1, len(pts) - 1):
+        x0, y0 = pts[i]
+        num = abs((y2 - y1) * x0 - (x2 - x1) * y0 + x2 * y1 - y2 * x1)
+        d = num / (math.hypot(y2 - y1, x2 - x1) or 1e-9)
+        if d > dmax:
+            dmax, idx = d, i
+    if dmax > eps:
+        return _dp(pts[:idx + 1], eps)[:-1] + _dp(pts[idx:], eps)
+    return [pts[0], pts[-1]]
+
+
+def _map_paths(geo_path):
+    with open(geo_path, encoding="utf-8") as f:
+        gj = json.load(f)
+    MAIN, BOX = (-9.7, 4.6, 34.9, 43.95), (16, 12, 788, 462)
+    CAN, CBOX = (-18.4, -13.3, 27.5, 29.6), (24, 388, 214, 544)
+
+    def proj(lon, lat, bounds, box):
+        lo0, lo1, la0, la1 = bounds
+        x0, y0, x1, y1 = box
+        mx = math.cos(math.radians((la0 + la1) / 2))
+        fx = (lon - lo0) * mx / ((lo1 - lo0) * mx)
+        fy = (la1 - lat) / (la1 - la0)
+        return (x0 + fx * (x1 - x0), y0 + fy * (y1 - y0))
+
+    out = []
+    for feat in gj["features"]:
+        cod = str(feat["properties"].get("cod_ccaa", "")).zfill(2)
+        geom = feat["geometry"]
+        polys = geom["coordinates"] if geom["type"] == "MultiPolygon" else [geom["coordinates"]]
+        bounds, box = (CAN, CBOX) if cod == "05" else (MAIN, BOX)
+        segs = []
+        for poly in polys:
+            ring = poly[0]                      # anillo exterior (sin agujeros)
+            if len(ring) > 1 and ring[0] == ring[-1]:
+                ring = ring[:-1]                # abrir el anillo: el cierre lo pone "Z"
+            pts = _dp([proj(p[0], p[1], bounds, box) for p in ring], 0.8)
+            if len(pts) >= 3:
+                segs.append("M" + " ".join(f"{x:.0f} {y:.0f}" for x, y in pts) + "Z")
+        if segs:
+            out.append({"cod": cod, "d": "".join(segs)})
+    return out
+
+
+def _mapa_page(geo_path, data_by_cod, nom_by_cod):
+    paths = _map_paths(geo_path)
+    if not paths:
+        return ""
+    W, H = 800, 560
+    keys = [("ipv", "IPV · variación anual"), ("vut", "VUT · % del parque"),
+            ("lz", "Lanzamientos / 1.000 viv."), ("eh", "Ejecuciones / 1.000 viv."),
+            ("cv", "Compraventas / 1.000 viv.")]
+    body_svg = []
+    for p in paths:
+        d = data_by_cod.get(p["cod"], {})
+        nom = E(nom_by_cod.get(p["cod"], ""))
+        attrs = " ".join(f'data-{k}="{d[k]}"' for k in ("ipv", "vut", "lz", "eh", "cv")
+                         if d.get(k) is not None)
+        body_svg.append(f'<path class="ccaa" fill="#e2e8f0" data-nom="{nom}" d="{p["d"]}" {attrs}>'
+                        f'<title>{nom}</title></path>')
+    svg = (f'<svg id="mapsvg" viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" '
+           f'style="width:100%;height:auto" role="img" aria-label="Mapa de las CCAA">'
+           f'<rect x="18" y="388" width="201" height="160" fill="#fff" stroke="#e2e8f0" rx="6"/>'
+           f'<text x="30" y="406" font-size="10.5" fill="#64748b">Canarias</text>'
+           f'<g stroke="#fff" stroke-width="0.6">{"".join(body_svg)}</g></svg>')
+    opts = "".join(f'<option value="{k}">{E(t)}</option>' for k, t in keys)
+    body = (
+        '<h2>Mapa por comunidad autónoma</h2><div class="panel">'
+        '<p style="font-size:.85rem;margin:0 0 10px"><label>Indicador: <select id="msel">'
+        f'{opts}</select></label></p>'
+        f'{svg}'
+        '<div style="display:flex;align-items:center;gap:10px;margin-top:10px;font-size:.8rem">'
+        '<span class="mut" id="lmin"></span><span id="lt" style="font-weight:700"></span>'
+        '<span class="mut" id="lmax"></span></div>'
+        '<div style="height:10px;border-radius:6px;margin-top:4px;'
+        'background:linear-gradient(90deg,#ccfbf1,#0f766e)"></div>'
+        '<p class="mut" style="font-size:.78rem;margin:10px 0 0">Escala teal de un solo tono: más oscuro = valor más alto. '
+        'Compraventas, lanzamientos y ejecuciones por 1.000 viviendas; IPV y VUT en %. Pasa el cursor por una comunidad para ver su valor.</p>'
+        '</div>'
+        '<script>(function(){'
+        'var K={ipv:"IPV · variación anual",vut:"VUT · % del parque",lz:"Lanzamientos / 1.000 viv.",'
+        'eh:"Ejecuciones / 1.000 viv.",cv:"Compraventas / 1.000 viv."};'
+        'var P=[].slice.call(document.querySelectorAll("path.ccaa"));'
+        'function fmt(v){return (Math.round(v*10)/10).toString().replace(".",",");}'
+        'function paint(k){var vs=P.map(function(p){return parseFloat(p.getAttribute("data-"+k));})'
+        '.filter(function(v){return !isNaN(v);});var mn=Math.min.apply(null,vs),mx=Math.max.apply(null,vs);'
+        'P.forEach(function(p){var v=parseFloat(p.getAttribute("data-"+k));var t=p.querySelector("title");'
+        'var nm=p.getAttribute("data-nom")||"";'
+        'if(isNaN(v)){p.setAttribute("fill","#e2e8f0");p.setAttribute("fill-opacity","1");'
+        'if(t)t.textContent=nm+": sin dato";return;}'
+        'var r=(mx>mn)?(v-mn)/(mx-mn):0.5;p.setAttribute("fill","#0f766e");'
+        'p.setAttribute("fill-opacity",(0.18+0.82*r).toFixed(2));if(t)t.textContent=nm+": "+fmt(v);});'
+        'document.getElementById("lt").textContent=K[k];'
+        'document.getElementById("lmin").textContent="menos: "+fmt(mn);'
+        'document.getElementById("lmax").textContent="más: "+fmt(mx);}'
+        'var s=document.getElementById("msel");s.addEventListener("change",function(){paint(this.value);});paint("ipv");'
+        '})();</script>')
+    return _shell("Mapa por CCAA — datos de vivienda",
+                  "Mapa de las comunidades autónomas con las tasas de vivienda (IPV, VUT, "
+                  "compraventas, lanzamientos y ejecuciones por 1.000 viviendas).",
+                  "https://vivienda.pruebapublica.com/mapa.html", "Mapa por comunidad autónoma",
+                  "Las tasas de vivienda de cada comunidad autónoma, en un mapa.", body)
 
 
 def build():
@@ -1257,7 +1371,7 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 .share a:hover,.share button:hover{{border-color:var(--accent);color:var(--accent)}}
 </style></head><body>
 <nav class="nav"><div class="in"><b>🏠 Observatorio de la vivienda</b>
-<a href="#indicadores">Indicadores</a><a href="#inflacion">Inflación</a><a href="#comparador">Comparador</a><a href="#dicen">Se dice</a><a href="#calendario">Calendario</a><a href="#medidas">Medidas</a><a href="#zmrt">Zonas</a><a href="#metodo">Método</a><a href="#apoyar">Apoyar</a><a href="/fuentes.html">Fuentes</a><a href="/propiedad.html">Propiedad</a><a href="/datos.html">Datos</a><a href="/ccaa/">CCAA</a>
+<a href="#indicadores">Indicadores</a><a href="#inflacion">Inflación</a><a href="#comparador">Comparador</a><a href="#dicen">Se dice</a><a href="#calendario">Calendario</a><a href="#medidas">Medidas</a><a href="#zmrt">Zonas</a><a href="#metodo">Método</a><a href="#apoyar">Apoyar</a><a href="/fuentes.html">Fuentes</a><a href="/propiedad.html">Propiedad</a><a href="/datos.html">Datos</a><a href="/mapa.html">Mapa</a><a href="/ccaa/">CCAA</a>
 <a href="https://pruebapublica.com" style="opacity:.7">pruebapublica.com</a></div></nav>
 <header class="hero"><div class="wrap">
 <h1>Qué dicen los datos oficiales de vivienda, sin puntuaciones ni atribuciones</h1>
@@ -1399,6 +1513,7 @@ sel.addEventListener('change',upd);
              "https://vivienda.pruebapublica.com/fuentes.html",
              "https://vivienda.pruebapublica.com/propiedad.html",
              "https://vivienda.pruebapublica.com/datos.html",
+             "https://vivienda.pruebapublica.com/mapa.html",
              "https://vivienda.pruebapublica.com/ccaa/"]
     _urls += [f"https://vivienda.pruebapublica.com/ccaa/{_slug(_n)}.html"
               for _c, _n in territorios.NOMBRE.items()]
@@ -1434,6 +1549,17 @@ sel.addEventListener('change',upd);
             f.write(_ccaa_page(_nom, _d, _ccaa_pages))
     with open(os.path.join(OUT_DIR, "ccaa", "index.html"), "w", encoding="utf-8") as f:
         f.write(_ccaa_index(_ccaa_pages))
+    # mapa coroplético por CCAA (si hay geo)
+    if os.path.exists(MAP_GEO):
+        try:
+            _mpage = _mapa_page(MAP_GEO, {c: dd for c, _n, dd in _ccaa_pages}, territorios.NOMBRE)
+            if _mpage:
+                with open(os.path.join(OUT_DIR, "mapa.html"), "w", encoding="utf-8") as f:
+                    f.write(_mpage)
+        except (OSError, ValueError) as _e:
+            print(f"[gen] mapa omitido: {_e}", file=sys.stderr)
+    else:
+        print("[gen] sin data/spain-ccaa.geojson: mapa omitido", file=sys.stderr)
     # RSS de cambios (normas + cambios de series)
     try:
         _hist = json.load(open(os.path.join(ROOT, "data", "historial.json"), encoding="utf-8"))

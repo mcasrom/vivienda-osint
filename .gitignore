@@ -3,6 +3,7 @@ __pycache__/
 .env
 venv/
 data/*.db
+data/*.geojson
 data/frescura.json
 data/frescura.json.tmp
 data/watchdog_estado.json
@@ -14,7 +15,10 @@ web/propiedad.html
 web/sitemap.xml
 web/robots.txt
 web/og.png
+web/og/
 web/data/
 web/datos.html
+web/mapa.html
+web/ccaa/
+web/cambios.xml
 web/llms.txt
-web/datos.html
