@@ -742,11 +742,35 @@ def _dp(pts, eps):
     return [pts[0], pts[-1]]
 
 
+def _bbox(coords):
+    xs, ys = [], []
+
+    def walk(c):
+        if isinstance(c[0], (int, float)):
+            xs.append(c[0]); ys.append(c[1])
+        else:
+            for x in c:
+                walk(x)
+
+    walk(coords)
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def _poly_area(ring):
+    a = 0.0
+    for i in range(len(ring)):
+        x1, y1 = ring[i][0], ring[i][1]
+        x2, y2 = ring[(i + 1) % len(ring)][0], ring[(i + 1) % len(ring)][1]
+        a += x1 * y2 - x2 * y1
+    return abs(a) / 2.0
+
+
 def _map_paths(geo_path):
     with open(geo_path, encoding="utf-8") as f:
         gj = json.load(f)
-    MAIN, BOX = (-9.7, 4.6, 34.9, 43.95), (16, 12, 788, 462)
-    CAN, CBOX = (-18.4, -13.3, 27.5, 29.6), (24, 388, 214, 544)
+    MAIN, BOX = (-9.7, 4.6, 34.9, 43.95), (16, 12, 788, 442)
+    # recuadros ampliados (x0,y0,x1,y1) para las regiones que se pierden a escala peninsular
+    INSETS = {"05": (18, 452, 200, 548), "18": (232, 452, 392, 548), "19": (424, 452, 584, 548)}
 
     def proj(lon, lat, bounds, box):
         lo0, lo1, la0, la1 = bounds
@@ -761,8 +785,18 @@ def _map_paths(geo_path):
         cod = str(feat["properties"].get("cod_ccaa", "")).zfill(2)
         geom = feat["geometry"]
         polys = geom["coordinates"] if geom["type"] == "MultiPolygon" else [geom["coordinates"]]
-        bounds, box = (CAN, CBOX) if cod == "05" else (MAIN, BOX)
-        segs = []
+        if cod in INSETS:                       # bounds propios → máxima ampliación
+            box = INSETS[cod]
+            if cod in ("18", "19"):             # Ceuta/Melilla: solo la ciudad (sin islotes lejanos)
+                main = max(polys, key=lambda pl: _poly_area(pl[0]))
+                bb = _bbox([main[0]])
+                polys = [main]
+            else:                               # Canarias: todo el archipiélago
+                bb = _bbox(geom["coordinates"])
+            bounds = (bb[0], bb[2], bb[1], bb[3])
+        else:
+            bounds, box = MAIN, BOX
+        segs, best = [], (0, None)
         for poly in polys:
             ring = poly[0]                      # anillo exterior (sin agujeros)
             if len(ring) > 1 and ring[0] == ring[-1]:
@@ -770,11 +804,16 @@ def _map_paths(geo_path):
             pts = _dp([proj(p[0], p[1], bounds, box) for p in ring], 0.8)
             if len(pts) >= 3:
                 segs.append("M" + " ".join(f"{x:.0f} {y:.0f}" for x, y in pts) + "Z")
-        if segs:
-            out.append({"cod": cod, "d": "".join(segs)})
+                if len(pts) > best[0]:
+                    best = (len(pts), pts)
+        if not segs:
+            continue
+        cx = cy = None
+        if best[1]:
+            cx = sum(p[0] for p in best[1]) / len(best[1])
+            cy = sum(p[1] for p in best[1]) / len(best[1])
+        out.append({"cod": cod, "d": "".join(segs), "cx": cx, "cy": cy})
     return out
-
-
 def _mapa_page(geo_path, data_by_cod, nom_by_cod):
     paths = _map_paths(geo_path)
     if not paths:
@@ -783,49 +822,75 @@ def _mapa_page(geo_path, data_by_cod, nom_by_cod):
     keys = [("ipv", "IPV · variación anual"), ("vut", "VUT · % del parque"),
             ("lz", "Lanzamientos / 1.000 viv."), ("eh", "Ejecuciones / 1.000 viv."),
             ("cv", "Compraventas / 1.000 viv.")]
-    body_svg = []
+    inset_bg = (
+        '<rect x="12" y="446" width="194" height="108" fill="#fff" stroke="#e2e8f0" rx="6"/>'
+        '<text x="22" y="462" font-size="10.5" fill="#64748b">Canarias</text>'
+        '<rect x="226" y="446" width="172" height="108" fill="#fff" stroke="#e2e8f0" rx="6"/>'
+        '<text x="236" y="462" font-size="10.5" fill="#64748b">Ceuta</text>'
+        '<rect x="418" y="446" width="172" height="108" fill="#fff" stroke="#e2e8f0" rx="6"/>'
+        '<text x="428" y="462" font-size="10.5" fill="#64748b">Melilla</text>')
+    body_paths, labels = [], []
     for p in paths:
         d = data_by_cod.get(p["cod"], {})
         nom = E(nom_by_cod.get(p["cod"], ""))
         attrs = " ".join(f'data-{k}="{d[k]}"' for k in ("ipv", "vut", "lz", "eh", "cv")
                          if d.get(k) is not None)
-        body_svg.append(f'<path class="ccaa" fill="#e2e8f0" data-nom="{nom}" d="{p["d"]}" {attrs}>'
-                        f'<title>{nom}</title></path>')
+        body_paths.append(f'<path class="ccaa" data-cod="{p["cod"]}" fill="#e2e8f0" '
+                          f'data-nom="{nom}" d="{p["d"]}" {attrs}><title>{nom}</title></path>')
+        if p["cx"] is not None:
+            labels.append(f'<text class="vlab" data-t="{p["cod"]}" '
+                          f'x="{p["cx"]:.0f}" y="{p["cy"]:.0f}"></text>')
     svg = (f'<svg id="mapsvg" viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" '
            f'style="width:100%;height:auto" role="img" aria-label="Mapa de las CCAA">'
-           f'<rect x="18" y="388" width="201" height="160" fill="#fff" stroke="#e2e8f0" rx="6"/>'
-           f'<text x="30" y="406" font-size="10.5" fill="#64748b">Canarias</text>'
-           f'<g stroke="#fff" stroke-width="0.6">{"".join(body_svg)}</g></svg>')
+           f'{inset_bg}'
+           f'<g stroke="#fff" stroke-width="0.6">{"".join(body_paths)}</g>'
+           f'<g font-size="10" font-weight="700" fill="#0f172a" text-anchor="middle" '
+           f'style="paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round;'
+           f'pointer-events:none">{"".join(labels)}</g></svg>')
     opts = "".join(f'<option value="{k}">{E(t)}</option>' for k, t in keys)
     body = (
+        '<style>.mlist{font-size:.8rem}.mrow{display:flex;justify-content:space-between;gap:8px;'
+        'padding:3px 0;border-bottom:1px solid #f1f5f9}.mrow b{color:#0f766e}</style>'
         '<h2>Mapa por comunidad autónoma</h2><div class="panel">'
         '<p style="font-size:.85rem;margin:0 0 10px"><label>Indicador: <select id="msel">'
         f'{opts}</select></label></p>'
-        f'{svg}'
+        '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">'
+        f'<div style="flex:1 1 440px;min-width:300px">{svg}</div>'
+        '<div style="flex:0 0 210px;min-width:190px"><p class="mut" style="font-size:.78rem;'
+        'margin:0 0 6px">Ranking</p><div id="mlist" class="mlist"></div></div></div>'
         '<div style="display:flex;align-items:center;gap:10px;margin-top:10px;font-size:.8rem">'
         '<span class="mut" id="lmin"></span><span id="lt" style="font-weight:700"></span>'
         '<span class="mut" id="lmax"></span></div>'
         '<div style="height:10px;border-radius:6px;margin-top:4px;'
         'background:linear-gradient(90deg,#ccfbf1,#0f766e)"></div>'
-        '<p class="mut" style="font-size:.78rem;margin:10px 0 0">Escala teal de un solo tono: más oscuro = valor más alto. '
-        'Compraventas, lanzamientos y ejecuciones por 1.000 viviendas; IPV y VUT en %. Pasa el cursor por una comunidad para ver su valor.</p>'
+        '<p class="mut" style="font-size:.78rem;margin:10px 0 0">Escala teal de un solo tono: '
+        'más oscuro = valor más alto. Compraventas, lanzamientos y ejecuciones por 1.000 viviendas; '
+        'IPV y VUT en %. Ceuta, Melilla y Canarias se muestran ampliadas. Pasa el cursor o mira el '
+        'ranking para el valor; en Lanzamientos, Ceuta y Melilla no tienen dato (s/d).</p>'
         '</div>'
         '<script>(function(){'
         'var K={ipv:"IPV · variación anual",vut:"VUT · % del parque",lz:"Lanzamientos / 1.000 viv.",'
         'eh:"Ejecuciones / 1.000 viv.",cv:"Compraventas / 1.000 viv."};'
         'var P=[].slice.call(document.querySelectorAll("path.ccaa"));'
+        'var T={};[].slice.call(document.querySelectorAll("text.vlab")).forEach(function(t)'
+        '{T[t.getAttribute("data-t")]=t;});'
         'function fmt(v){return (Math.round(v*10)/10).toString().replace(".",",");}'
         'function paint(k){var vs=P.map(function(p){return parseFloat(p.getAttribute("data-"+k));})'
         '.filter(function(v){return !isNaN(v);});var mn=Math.min.apply(null,vs),mx=Math.max.apply(null,vs);'
+        'var rows=[];'
         'P.forEach(function(p){var v=parseFloat(p.getAttribute("data-"+k));var t=p.querySelector("title");'
-        'var nm=p.getAttribute("data-nom")||"";'
+        'var nm=p.getAttribute("data-nom")||"";var t2=T[p.getAttribute("data-cod")];'
         'if(isNaN(v)){p.setAttribute("fill","#e2e8f0");p.setAttribute("fill-opacity","1");'
-        'if(t)t.textContent=nm+": sin dato";return;}'
+        'if(t)t.textContent=nm+": sin dato";if(t2)t2.textContent="s/d";rows.push([nm,null]);return;}'
         'var r=(mx>mn)?(v-mn)/(mx-mn):0.5;p.setAttribute("fill","#0f766e");'
-        'p.setAttribute("fill-opacity",(0.18+0.82*r).toFixed(2));if(t)t.textContent=nm+": "+fmt(v);});'
+        'p.setAttribute("fill-opacity",(0.18+0.82*r).toFixed(2));if(t)t.textContent=nm+": "+fmt(v);'
+        'if(t2)t2.textContent=fmt(v);rows.push([nm,v]);});'
         'document.getElementById("lt").textContent=K[k];'
         'document.getElementById("lmin").textContent="menos: "+fmt(mn);'
-        'document.getElementById("lmax").textContent="más: "+fmt(mx);}'
+        'document.getElementById("lmax").textContent="más: "+fmt(mx);'
+        'rows.sort(function(a,b){return (b[1]==null?-1e9:b[1])-(a[1]==null?-1e9:a[1]);});'
+        'document.getElementById("mlist").innerHTML=rows.map(function(r){return '
+        '\'<div class="mrow"><span>\'+r[0]+\'</span><b>\'+(r[1]==null?"s/d":fmt(r[1]))+\'</b></div>\';}).join("");}'
         'var s=document.getElementById("msel");s.addEventListener("change",function(){paint(this.value);});paint("ipv");'
         '})();</script>')
     return _shell("Mapa por CCAA — datos de vivienda",
@@ -833,8 +898,6 @@ def _mapa_page(geo_path, data_by_cod, nom_by_cod):
                   "compraventas, lanzamientos y ejecuciones por 1.000 viviendas).",
                   "https://vivienda.pruebapublica.com/mapa.html", "Mapa por comunidad autónoma",
                   "Las tasas de vivienda de cada comunidad autónoma, en un mapa.", body)
-
-
 def build():
     v = via.resumen()
     hoy = date.today().isoformat()
