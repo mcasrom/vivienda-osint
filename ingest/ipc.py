@@ -91,7 +91,7 @@ def ingest() -> int:
         for tipo, cod in (("var_anual", cvar), ("indice", cidx), ("ponderacion", cpond)):
             if not cod:
                 continue
-            nult = 1 if tipo == "ponderacion" else 25
+            nult = 1 if tipo == "ponderacion" else (140 if (comp, tipo) == ("general", "indice") else 25)
             for s in _datos(cod, nult):
                 for x in s.get("Data", []):
                     val = x.get("Valor")

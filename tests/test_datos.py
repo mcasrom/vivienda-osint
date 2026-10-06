@@ -185,15 +185,17 @@ if os.path.exists(json_latest) and os.path.exists(html_p):
         r'(?: · <span class="mut">([^<]*)</span>)?</div>', page)
     CLAVE = {"IPV (compraventa)": "ipv", "IPVA (alquiler)": "ipva",
              "lanzamientos": "lz", "ejecuciones": "eh"}
-    # la portada lleva 4 tarjetas; la VUT se publica como ranking, no como indicador
-    check(len(tarjetas) == len(CLAVE),
-          f"la portada tiene {len(tarjetas)} tarjetas y se esperan {len(CLAVE)}")
+    # la portada lleva 4 tarjetas + la informativa de brecha vivienda–salario
+    # (base 2016=100); la VUT se publica como ranking, no como indicador
+    check(len(tarjetas) == len(CLAVE) + 1,
+          f"la portada tiene {len(tarjetas)} tarjetas y se esperan {len(CLAVE) + 1}")
     check(set(ind) - set(CLAVE.values()) == {"vut"},
           f"latest.json publica {sorted(set(ind) - set(CLAVE.values()))} y solo la VUT va como ranking")
     for valor, _unidad, cls, tend_txt, fuente, per_txt, _act in tarjetas:
         k = next((v for c, v in CLAVE.items() if c in fuente), None)
-        check(k is not None, f"tarjeta de fuente desconocida: {fuente!r}")
         if k is None:
+            check("brecha" in fuente,
+                  f"tarjeta de fuente desconocida: {fuente!r}")
             continue
         etq = ind[k]["tendencia"]
         check(etq in FLECHAS, f"{k}: tendencia {etq!r} sin flecha definida en el test")
@@ -608,6 +610,35 @@ else:
             if _esfs:
                 check(min(_esfs) > 3 and max(_esfs) < 90,
                       f"esfuerzo fuera de rango plausible [{min(_esfs)}, {max(_esfs)}]")
+
+# ---------------------------------------------------------------------------
+# 28. poder adquisitivo (IPV + IPVA + IPC + ETCL, base 2016=100): anclas y cobertura
+# ---------------------------------------------------------------------------
+_podp = os.path.join(WEB, "data", "poder-adquisitivo-vivienda.json")
+if os.path.isdir(os.path.join(WEB, "data")):
+    check(os.path.exists(_podp), "falta el dataset poder-adquisitivo-vivienda.json")
+    if os.path.exists(_podp):
+        _podd = json.load(open(_podp, encoding="utf-8")).get("datos", [])
+        _pod = {x["anyo"]: x for x in _podd if x.get("anyo")}
+        check(len(_pod) >= 9, f"poder-adquisitivo con pocos años: {len(_pod)}")
+        check(2016 in _pod, "poder-adquisitivo sin año base 2016")
+        for _k in ("vivienda_ipv", "alquiler_ipva", "ipc_general", "salario_etcl"):
+            check(_pod.get(2016, {}).get(_k) == 100.0, f"{_k} no vale 100.0 en 2016")
+        _cerca = lambda v, ref, tol: v is not None and v != "" and abs(float(v) - ref) <= tol
+        check(_cerca((_pod.get(2025) or {}).get("vivienda_ipv"), 171.9, 3.0),
+              "IPV 2025 no ronda 172 en base 2016=100")
+        check(_cerca((_pod.get(2025) or {}).get("salario_etcl"), 125.3, 3.0),
+              "salario 2025 no ronda 125 en base 2016=100")
+        check(_cerca((_pod.get(2025) or {}).get("ipc_general"), 127.0, 2.0),
+              "IPC 2025 no ronda 127 en base 2016=100")
+        check(_cerca((_pod.get(2024) or {}).get("alquiler_ipva"), 120.9, 2.0),
+              "alquiler 2024 no ronda 121 en base 2016=100")
+        check((_pod.get(2025) or {}).get("alquiler_ipva") in (None, ""),
+              "alquiler 2025 debe ir vacío (IPVA anual aún no publicado: no extrapolar)")
+    _idxp = os.path.join(WEB, "index.html")
+    if os.path.exists(_idxp):
+        _html = open(_idxp, encoding="utf-8").read()
+        check('id="poder-adquisitivo"' in _html, "portada sin sección poder-adquisitivo")
 
 if FALLOS:
     print(f"FALLOS ({len(FALLOS)}):", file=sys.stderr)

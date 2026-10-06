@@ -1,6 +1,7 @@
 """Ingesta INE (datos abiertos wstempus):
   · IPVA (tabla 59056): Índice de Precios de Vivienda (compraventa) nacional.
   · IPV  (tabla 80270): precios por CCAA (variación anual, trimestral).
+  · ETCL (tabla 6038): coste salarial total por trabajador (nacional, trimestral).
 Guarda series en data/vivienda.db.
 """
 from __future__ import annotations
@@ -10,7 +11,7 @@ from ingest import territorios
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB = os.path.join(ROOT, "data", "vivienda.db")
-TABLAS = {"ipva": 59056, "ipv": 80270}
+TABLAS = {"ipva": 59056, "ipv": 80270, "etcl": 6038}
 
 
 def _con():
@@ -56,7 +57,7 @@ def ingest() -> int:
     # Antes solo se guardaba el «Nacional. General», así que el comparador regional
     # quedaba «no ingestado por CCAA» aunque el INE sí publica la serie por CCAA.
     ccaa_code = {n.lower(): c for c, n in territorios.NOMBRE.items()}
-    for s in _get(f"https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA/{TABLAS['ipv']}?nult=12&tip=AM"):
+    for s in _get(f"https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA/{TABLAS['ipv']}?nult=48&tip=AM"):
         nom = s.get("Nombre", "")
         if nom.startswith("Nacional."):
             key = ("ipv_indice" if nom == "Nacional. General. Índice. "
@@ -247,6 +248,32 @@ def hpt_serie():
         return []
 
 
+def ingest_etcl() -> int:
+    """ETCL (tabla 6038): coste salarial total por trabajador (nacional, trimestral).
+
+    Serie «Ambas jornadas. Industria, construcción y servicios (…) · Coste salarial
+    total · Total Nacional · Euros». Es coste por trabajador con ambas jornadas
+    (incluye parciales prorrateados): NO es un salario a jornada completa ni la
+    ganancia anual de la EES. Así se declara en la web.
+    """
+    c = _con()
+    c.execute("DELETE FROM ine_serie WHERE serie='etcl_salario'")
+    n = 0
+    for s in _get(f"https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA/{TABLAS['etcl']}?nult=48&tip=AM"):
+        nom = s.get("Nombre", "")
+        if not (nom.startswith("Ambas jornadas. Industria, construcción y servicios")
+                and ". Coste salarial total. " in nom and "Total Nacional" in nom):
+            continue
+        for x in s.get("Data", []):
+            if x.get("Valor") is None:
+                continue
+            n += c.execute("INSERT OR REPLACE INTO ine_serie VALUES(?,?,?,?)",
+                           ("etcl_salario", (x.get("Fecha", "") or "")[:10],
+                            "coste salarial / trabajador / mes", float(x["Valor"]))).rowcount
+    c.commit()
+    return n
+
+
 def eh_nacional():
     """[(año, valor)] de la serie nacional de ejecuciones hipotecarias."""
     try:
@@ -264,10 +291,19 @@ def serie(nombre: str):
         return []
 
 
+def serie_fecha(nombre: str):
+    """[(fecha ISO, valor)] ordenados (para medias anuales)."""
+    try:
+        c = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
+        return c.execute("SELECT fecha, valor FROM ine_serie WHERE serie=? ORDER BY fecha", (nombre,)).fetchall()
+    except Exception:
+        return []
+
+
 def ultimo(nombre: str):
     s = serie(nombre)
     return s[-1][1] if s else None
 
 
 if __name__ == "__main__":
-    print(f"[ine] puntos actualizados: {ingest()} · EH: {ingest_eh()} · VTE: {ingest_vte()} · CV: {ingest_etdp()} · HPT: {ingest_hpt()}")
+    print(f"[ine] puntos actualizados: {ingest()} · EH: {ingest_eh()} · VTE: {ingest_vte()} · CV: {ingest_etdp()} · HPT: {ingest_hpt()} · ETCL: {ingest_etcl()}")

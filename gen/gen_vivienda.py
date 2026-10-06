@@ -221,6 +221,10 @@ SOURCES = [
     ("INE · IPVA", "Índice de precios del alquiler (variación anual)",
      "Índice de Precios de Vivienda en Alquiler", "https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA/59056",
      "Anual (experimental, base fiscal)", "INE", "https://www.ine.es/"),
+    ("INE · ETCL", "Coste salarial por trabajador (trimestral, para el índice base 2016)",
+     "Encuesta Trimestral de Coste Laboral: coste salarial total, ambas jornadas, total nacional",
+     "https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA/6038",
+     "Trimestral", "INE", "https://www.ine.es/"),
     ("INE · EH", "Ejecuciones hipotecarias de vivienda por CCAA",
      "Estadística de Ejecuciones Hipotecarias", "https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA/10740",
      "Trimestral", "INE", "https://www.ine.es/"),
@@ -308,7 +312,7 @@ def _fuentes_html():
 <h2>4. Límites de la auditoría</h2>
 <div class="panel"><ul>
 <li><b>Licencias</b>: INE y datos del observatorio, <b>CC BY 4.0</b>; CGPJ (datos judiciales públicos), BOE y MIVAU/SERPAVI, reutilización <b>citando la fuente</b>.</li>
-<li><b>Momentos distintos</b>: precios, registros, alquiler fiscal y lanzamientos no se combinan en un mismo gráfico.</li>
+<li><b>Momentos distintos</b>: precios, registros, alquiler fiscal y lanzamientos no se combinan en un mismo gráfico, <b>salvo</b> índices oficiales rebasados a la misma base con medias anuales (sección «Poder adquisitivo»: IPV + IPVA + IPC + ETCL, base 2016=100).</li>
 <li><b>No se publica precio del alquiler por municipio ni provincia</b>: la muestra de anuncios disponible no da para una cifra defendible. El alquiler se publica solo como índice IPVA (INE), cuyo último dato es de 2024.</li>
 <li>El observatorio <b>no interpreta causalidad</b>.</li>
 </ul></div>
@@ -521,7 +525,7 @@ def _nice_ticks(mn, mx, n=5):
     return out
 
 
-def svg_multiline(series, w=780, h=270, fmt=None, ticks_n=5):
+def svg_multiline(series, w=780, h=270, fmt=None, ticks_n=5, sufijo="%"):
     """Varias líneas sobre el mismo eje Y, con **rejilla y valores del eje Y**
     rotulados, leyenda con el último valor de cada línea y eje X con las fechas.
     `series` = [(label, color, [(fecha, valor)])]; alineadas por fecha (intersección)."""
@@ -548,7 +552,7 @@ def svg_multiline(series, w=780, h=270, fmt=None, ticks_n=5):
         _, y = xy(0, tv)
         out.append(f'<line x1="{l}" y1="{y:.0f}" x2="{w-r}" y2="{y:.0f}" stroke="#e2e8f0"/>')
         out.append(f'<text x="{l-6}" y="{y+3:.0f}" font-size="9.5" fill="#64748b" '
-                   f'text-anchor="end">{E(fmt(tv))}%</text>')
+                   f'text-anchor="end">{E(fmt(tv))}{sufijo}</text>')
     if mn <= 0 <= mx:                                   # línea 0 destacada
         _, y0 = xy(0, 0)
         out.append(f'<line x1="{l}" y1="{y0:.0f}" x2="{w-r}" y2="{y0:.0f}" stroke="#94a3b8"/>')
@@ -560,13 +564,93 @@ def svg_multiline(series, w=780, h=270, fmt=None, ticks_n=5):
             out.append(f'<circle cx="{x:.0f}" cy="{y:.0f}" r="2.2" fill="{color}"/>')
         xl, yl = pts[-1]
         out.append(f'<text x="{xl+6:.0f}" y="{yl+3:.0f}" font-size="10" fill="{color}" '
-                   f'font-weight="700">{E(label)} {E(fmt(mapas[idx][comun[-1]]))}%</text>')
+                   f'font-weight="700">{E(label)} {E(fmt(mapas[idx][comun[-1]]))}{sufijo}</text>')
     step = max(1, n // 8)
     for i, f in enumerate(comun):                       # eje X
         if i % step == 0 or i == n - 1:
             x, _ = xy(i, mn)
             out.append(f'<text x="{x:.0f}" y="{h-12}" font-size="9.5" fill="#64748b" '
                        f'text-anchor="middle">{E(_etq_mes(f))}</text>')
+    out.append("</svg>")
+    return "".join(out)
+
+
+def _media_anual(pares, n_esperado):
+    """[(fecha ISO, valor)] -> {año: media}. Solo años completos (n ==
+    n_esperado: 12 mensual, 4 trimestral, 1 anual) y anteriores al año en
+    curso (el año parcial siempre se excluye)."""
+    from collections import defaultdict
+    hoy = date.today().year
+    cubo = defaultdict(list)
+    for f, v in pares or []:
+        try:
+            a = int(str(f)[:4])
+        except (TypeError, ValueError):
+            continue
+        if v is None or a >= hoy:
+            continue
+        try:
+            cubo[a].append(float(v))
+        except (TypeError, ValueError):
+            continue
+    return {a: sum(vs) / len(vs) for a, vs in cubo.items() if len(vs) == n_esperado}
+
+
+def _svg_indice_100(series, w=780, h=270, ticks_n=5):
+    """Multilínea de índices base 100: UNIÓN de años (no intersección) con
+    huecos donde una serie termina antes, etiquetas Y sin '%' y leyenda con el
+    último valor de cada línea. `series` = [(label, color, [(año, valor)])]."""
+    fmt = lambda v: f"{v:.1f}".replace(".", ",")
+    sets = [set(a for a, _ in s) for _, _, s in series if s]
+    if not sets:
+        return "<p class='mut'>sin datos</p>"
+    union = sorted(set.union(*sets))
+    if len(union) < 2:
+        return "<p class='mut'>serie no conectada</p>"
+    mapas = [dict(s) for _, _, s in series]
+    allv = [mapas[i][a] for i in range(len(series)) for a in union if a in mapas[i]]
+    if not allv:
+        return "<p class='mut'>sin datos</p>"
+    ticks = _nice_ticks(min(allv), max(allv), ticks_n)
+    mn, mx = min(ticks), max(ticks)
+    rng = (mx - mn) or 1
+    n = len(union)
+    l, r, t, b = 52, 168, 14, 34
+
+    def xy(i, v):
+        return l + i * (w - l - r) / (n - 1), h - b - (v - mn) / rng * (h - t - b)
+
+    out = [f'<svg viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg" style="width:100%">']
+    for tv in ticks:
+        _, y = xy(0, tv)
+        out.append(f'<line x1="{l}" y1="{y:.0f}" x2="{w-r}" y2="{y:.0f}" stroke="#e2e8f0"/>')
+        out.append(f'<text x="{l-6}" y="{y+3:.0f}" font-size="9.5" fill="#64748b" '
+                   f'text-anchor="end">{E(fmt(tv))}</text>')
+    for label, color, _s in series:
+        mp = dict(_s)
+        seg, segs = [], []
+        for i, a in enumerate(union):
+            if a in mp:
+                seg.append((i, mp[a]))
+            elif seg:
+                segs.append(seg)
+                seg = []
+        if seg:
+            segs.append(seg)
+        for sgm in segs:
+            pts = [xy(i, v) for i, v in sgm]
+            out.append('<polyline points="' + " ".join(f"{x:.0f},{y:.0f}" for x, y in pts)
+                       + f'" fill="none" stroke="{color}" stroke-width="2.4"/>')
+            for x, y in pts:
+                out.append(f'<circle cx="{x:.0f}" cy="{y:.0f}" r="2.2" fill="{color}"/>')
+        last = [(i, mp[a]) for i, a in enumerate(union) if a in mp][-1]
+        xl, yl = xy(*last)
+        out.append(f'<text x="{xl+6:.0f}" y="{yl+3:.0f}" font-size="10" fill="{color}" '
+                   f'font-weight="700">{E(label)} {E(fmt(last[1]))}</text>')
+    for i, a in enumerate(union):
+        x, _ = xy(i, mn)
+        out.append(f'<text x="{x:.0f}" y="{h-12}" font-size="9.5" fill="#64748b" '
+                   f'text-anchor="middle">{a}</text>')
     out.append("</svg>")
     return "".join(out)
 
@@ -1010,6 +1094,36 @@ def build():
     per_lz = lz_per or "—"
     per_eh = str(eh_anyo) if eh_anyo else "—"
     per_vut = str(vut_anyo) if vut_anyo else "—"
+    # Poder adquisitivo de la vivienda (base 2016=100): IPV + IPVA + IPC + ETCL.
+    # Frecuencias distintas -> medias anuales de años COMPLETOS (12/4/1 puntos);
+    # el año en curso se excluye siempre. El IPVA es anual y va con un año de
+    # retraso (último: 2024): su línea termina antes, dicho en la gráfica.
+    def _base100(medias, base=2016):
+        b = medias.get(base)
+        if not b:
+            return {}
+        return {a: v / b * 100 for a, v in medias.items()}
+    _pod_ipv = _base100(_media_anual(ine.serie_fecha("ipv_indice"), 4))
+    _pod_ipva = _base100(_media_anual(ine.serie_fecha("ipva_indice"), 1))
+    _pod_ipc = _base100(_media_anual(ipc.serie("general", "indice"), 12))
+    _pod_sal = _base100(_media_anual(ine.serie_fecha("etcl_salario"), 4))
+    _pod_ipv = {a: v for a, v in _pod_ipv.items() if a >= 2016}
+    _pod_ipva = {a: v for a, v in _pod_ipva.items() if a >= 2016}
+    _pod_ipc = {a: v for a, v in _pod_ipc.items() if a >= 2016}
+    _pod_sal = {a: v for a, v in _pod_sal.items() if a >= 2016}
+    _pod_ok = all(2016 in m for m in (_pod_ipv, _pod_ipva, _pod_ipc, _pod_sal))
+    _pod_y1 = max(set(_pod_ipv) & set(_pod_ipc) & set(_pod_sal)) if _pod_ok else None
+    _pod_series = []
+    if _pod_ok:
+        _pod_series = [
+            ("Vivienda (IPV)", "#b91c1c", sorted(_pod_ipv.items())),
+            ("Alquiler (IPVA)", "#b45309", sorted(_pod_ipva.items())),
+            ("IPC general", "#64748b", sorted(_pod_ipc.items())),
+            ("Salario (ETCL)", "#0369a1", sorted(_pod_sal.items())),
+        ]
+    _pod_svg = _svg_indice_100(_pod_series) if _pod_series else "<p class='mut'>sin datos suficientes</p>"
+    _pod_per = (f"2016→{_pod_y1} · alquiler hasta {max(_pod_ipva)}" if _pod_ok and _pod_ipva else "—")
+    _pod_brecha = (round(_pod_ipv[_pod_y1] - _pod_sal[_pod_y1], 1) if _pod_ok else None)
     ind_now = {"ipv": (ipv_ult, per_ipv), "ipva": (ipva_var, per_ipva),
                "lz": (lz_total, per_lz), "eh": (eh_total, per_eh), "vut": (vut_total, per_vut)}
     b0 = congelar_baseline(ind_now).get("ind", {})
@@ -1059,6 +1173,11 @@ def build():
              "CGPJ · lanzamientos (desahucios)", per_lz, edad=ed_cgpj),
         _ind((f"{int(eh_total):,}".replace(",", ".") if eh_total else "—"), "", tend_eh, _etq_nivel(tend_eh),
              "INE · ejecuciones hipotecarias", per_eh, edad=ed_ine),
+        _ind((f"+{_pod_brecha:.1f}".replace(".", ",") + " pp" if _pod_brecha is not None else "—"), "",
+             "", ("2016→" + str(_pod_y1)) if _pod_y1 else "",
+             "INE · brecha vivienda–salario (base 100)",
+             (_pod_per + f" · vivienda {E(str(round(_pod_ipv[_pod_y1])))} · salario {E(str(round(_pod_sal[_pod_y1])))}") if _pod_ok else "—",
+             edad=ed_ine),
     ])
     estado_datos = _estado_datos(est)
 
@@ -1237,6 +1356,16 @@ def build():
                    "anual (experimental, base fiscal)", "INE — reutilización citando fuente",
                    ["periodo", "variacion_anual", "indice"],
                    [{"periodo": e, "variacion_anual": v, "indice": ipva_idx.get(e, "")} for e, v in ipva_s], datasets)
+    if _pod_ok:
+        _pod_years = sorted(set(_pod_ipv) | set(_pod_ipva) | set(_pod_ipc) | set(_pod_sal))
+        _pod_val = lambda d, a: (round(d[a], 1) if a in d else "")
+        _write_dataset("poder-adquisitivo-vivienda", "Poder adquisitivo de la vivienda (base 2016=100)",
+                       "INE · IPV (80270), IPVA (59056), IPC general, ETCL (6038)",
+                       "anual (años completos)", "CC BY 4.0",
+                       ["anyo", "vivienda_ipv", "alquiler_ipva", "ipc_general", "salario_etcl"],
+                       [{"anyo": a, "vivienda_ipv": _pod_val(_pod_ipv, a),
+                         "alquiler_ipva": _pod_val(_pod_ipva, a), "ipc_general": _pod_val(_pod_ipc, a),
+                         "salario_etcl": _pod_val(_pod_sal, a)} for a in _pod_years], datasets)
     _write_dataset("ejecuciones-hipotecarias-ccaa", "Ejecuciones hipotecarias de vivienda por CCAA",
                    "INE · tabla 10740", str(eh_anyo) if eh_anyo else "—", "INE — reutilización citando fuente",
                    ["ccaa", "ejecuciones"], [{"ccaa": k, "ejecuciones": int(v)} for k, v in eh], datasets)
@@ -1438,10 +1567,10 @@ def build():
 - Una serie por indicador; cada una en `/data/<serie>.csv` y `/data/<serie>.json`:
   precios-ipv · alquiler-ipva · ejecuciones-hipotecarias-ccaa · ejecuciones-hipotecarias-nacional ·
   lanzamientos-ccaa · lanzamientos-cronologia · viviendas-turisticas-ccaa ·
-  boe-vivienda · punto-control
+  boe-vivienda · punto-control · poder-adquisitivo-vivienda
 
 ## Fuentes
-- INE: IPV (tabla 80270), IPVA (59056), ejecuciones hipotecarias (10740), viviendas turísticas (46141).
+- INE: IPV (tabla 80270), IPVA (59056), ejecuciones hipotecarias (10740), viviendas turísticas (46141), coste salarial ETCL (6038).
 - CGPJ: «Efecto de la crisis en los órganos judiciales» (lanzamientos, Excel trimestral).
 - BOE: sumario diario, sección I (disposiciones generales).
 
@@ -1535,7 +1664,7 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 .navshare .menu a:hover,.navshare .menu button:hover{{background:#f1f5f9;border-color:var(--accent);color:var(--accent)}}
 </style></head><body>
 <nav class="nav"><div class="in"><b>🏠 Observatorio de la vivienda</b>
-<a href="#indicadores">Indicadores</a><a href="#inflacion">Inflación</a><a href="#comparador">Comparador</a><a href="#dicen">Se dice</a><a href="#calendario">Calendario</a><a href="#medidas">Medidas</a><a href="#zmrt">Zonas</a><a href="#metodo">Método</a><a href="#apoyar">Apoyar</a><a href="/fuentes.html">Fuentes</a><a href="/propiedad.html">Propiedad</a><a href="/datos.html">Datos</a><a href="/mapa.html">Mapa</a><a href="/ccaa/">CCAA</a>
+<a href="#indicadores">Indicadores</a><a href="#poder-adquisitivo">Poder adquisitivo</a><a href="#inflacion">Inflación</a><a href="#comparador">Comparador</a><a href="#dicen">Se dice</a><a href="#calendario">Calendario</a><a href="#medidas">Medidas</a><a href="#zmrt">Zonas</a><a href="#metodo">Método</a><a href="#apoyar">Apoyar</a><a href="/fuentes.html">Fuentes</a><a href="/propiedad.html">Propiedad</a><a href="/datos.html">Datos</a><a href="/mapa.html">Mapa</a><a href="/ccaa/">CCAA</a>
 <a href="https://pruebapublica.com" style="opacity:.7">pruebapublica.com</a>{_navshare_home}</div></nav>
 <header class="hero"><div class="wrap">
 <h1>Qué dicen los datos oficiales de vivienda, sin puntuaciones ni atribuciones</h1>
@@ -1548,6 +1677,8 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 {estado_datos}
 <p class="mut" style="margin:8px 0 0;font-size:.78rem">Si una fuente no responde, el día no se actualiza y aquí aparece su <b>última versión válida</b>: la web nunca presenta datos viejos como recién publicados.</p>
 </div>
+<h2 id="poder-adquisitivo">La vivienda se despega <span>· precios, alquiler, IPC y salario desde 2016</span></h2>
+<div class="panel">{_pod_svg}<p class="mut" style="font-size:.8rem">Índices base 100 en 2016 (medias anuales de años completos; el año en curso se excluye). <b>Vivienda (IPV)</b>, <b>alquiler (IPVA)</b>, <b>IPC general</b> y <b>salario (ETCL: coste salarial por trabajador, ambas jornadas)</b>. El IPVA es anual y va con un año de retraso: su línea termina en 2024. Fuentes: <a href="https://www.ine.es/">INE</a> (tablas 80270, 59056, IPC general y 6038). Sin causalidad: describe niveles, no porqués.</p>{_descarga("poder-adquisitivo-vivienda")}</div>
 <h2>Precio de compraventa de vivienda, variación anual <span>· IPV nacional (INE)</span></h2>
 <div class="panel">{svg_line(ipv)}<p class="mut" style="font-size:.8rem">Índice de Precios de Vivienda (IPV), total nacional, variación anual (%). Fuente: <a href="https://www.ine.es/">INE</a>. Las medidas del BOE se registran abajo.</p>{_descarga("precios-ipv")}</div>
 
@@ -1651,6 +1782,7 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
 <h2 id="metodo">Método y límites</h2>
 <div class="panel"><ul>
 <li>Solo series <b>oficiales</b> con fuente, fecha y periodicidad visibles.</li>
+<li>El gráfico «Poder adquisitivo» combina <b>índices</b> (no precios) con base común 2016=100 y <b>medias anuales de años completos</b>; el alquiler (IPVA, anual) termina en 2024 y el salario es <b>coste salarial por trabajador con ambas jornadas</b> (ETCL), no un salario a jornada completa.</li>
 <li>Precios notariales, registros y alquiler fiscal miden <b>momentos distintos</b>: no se combinan en un mismo gráfico.</li>
 <li>El alquiler se publica como <b>(1) índice de variación (IPVA, INE)</b> —no es un precio por m²— y como <b>(2) alquiler de referencia por municipio (SERPAVI/MIVAU)</b>, que es la mediana de los <b>contratos/fianzas</b> (oficial), no el precio de oferta de los portales.</li>
 <li><b>IRAV</b> (Índice de Referencia de Arrendamientos de Vivienda, INE, desde ene-2025): es el <b>índice legal para actualizar la renta</b> de contratos en zonas de mercado tensionado (Ley 12/2023), <b>no un precio</b>. Se cita en el calendario; el INE no lo expone aún en su API de datos, así que no se automatiza (fuente: <a href="https://www.ine.es/dyngs/INEbase/es/operacion.htm?c=Estadistica_C&amp;cid=1254736177110&amp;menu=ultiDatos&amp;idp=1254735976607">INE</a>).</li>
