@@ -89,6 +89,39 @@ def _texto(c):
     return masto, x_txt, x_len
 
 
+def _poder(out_dir=OUT_DEF):
+    """Tarjeta del gráfico base 2016=100. Lee el dataset generado (única
+    fuente de verdad); None si falta (la tarjeta se omite sin romper)."""
+    try:
+        with open(os.path.join(ROOT, out_dir, "data", "poder-adquisitivo-vivienda.json"),
+                  encoding="utf-8") as f:
+            dd = json.load(f).get("datos", [])
+    except (OSError, ValueError):
+        return None
+    rows = {x["anyo"]: x for x in dd if x.get("anyo")}
+    ys = [y for y in rows if rows[y].get("vivienda_ipv") not in (None, "")]
+    if not ys:
+        return None
+    y1 = max(ys)
+    v, s = rows[y1]["vivienda_ipv"], rows[y1].get("salario_etcl")
+    if s in (None, ""):
+        return None
+    return dict(slug="poder-adquisitivo", kicker="PODER ADQUISITIVO",
+                num=f"{v:.0f}",
+                label=f"salario {_es_dec(s)} · base 2016=100 · {y1}",
+                source="INE · IPV + ETCL + IPC + IPVA",
+                frase=(f"La vivienda llega a {_es_dec(v)} y el salario a {_es_dec(s)}"
+                       f" (base 2016=100): +{_es_dec(v - s)} pp de brecha en una década"))
+
+
+def _texto_poder(c):
+    url = f"https://{SITE}/#poder-adquisitivo"
+    masto = f"{c['frase']}.\n\nDato oficial con fuente y periodo: {url}\n#vivienda #datosabiertos"
+    x_txt = f"{c['frase']}. Dato oficial: {url}"
+    x_len = len(x_txt) - len(url) + X_LINK
+    return masto, x_txt, x_len
+
+
 def _card(out_path, c):
     fig = plt.figure(figsize=(12, 6.3), dpi=100)
     ax = fig.add_axes([0, 0, 1, 1]); ax.axis("off")
@@ -206,6 +239,13 @@ def build(out_dir=OUT_DEF):
         cards.append({"slug": slug, "img": f"/og/{slug}.png", "kicker": "SE DICE / DICEN LOS DATOS",
                       "value": it["valor"], "label": it["valor_txt"], "source": it["fuente"],
                       "se_dice": it["se_dice"], "mastodon": masto, "x": x_txt, "x_len": x_len})
+    pc = _poder(out_dir)
+    if pc:
+        _card(os.path.join(od, pc["slug"] + ".png"), pc)
+        masto, x_txt, x_len = _texto_poder(pc)
+        cards.append({"slug": pc["slug"], "img": f"/og/{pc['slug']}.png", "kicker": pc["kicker"],
+                      "value": pc["num"], "label": pc["label"], "source": pc["source"],
+                      "mastodon": masto, "x": x_txt, "x_len": x_len})
     man = {"generado": date.today().isoformat(), "sitio": SITE, "cards": cards}
     with open(os.path.join(od, "cards.json"), "w", encoding="utf-8") as f:
         json.dump(man, f, ensure_ascii=False, indent=1)
