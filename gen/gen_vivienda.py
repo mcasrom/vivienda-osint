@@ -462,8 +462,34 @@ def svg_line(serie, color="#0f766e", w=780, h=210, marcas=(), fmt=None):
     for k, (x, y, e, v) in enumerate(pts):
         if k % max(1, n // 8) == 0 or k == n - 1:
             out.append(f'<text x="{x:.0f}" y="{h-12}" font-size="9.5" fill="#64748b" text-anchor="middle">{E(e)}</text>')
-    # valor en cada punto (rotulado)
-    for x, y, e, v in pts:
+    # valor rotulado: si hay pocos puntos, todos; si son muchos (>12), solo
+    # primero + último + extremos locales, con separación mínima para que no
+    # se solapen (antes se rotulaba todo y era ilegible).
+    _cands = set()
+    if n <= 12:
+        _cands = set(range(n))
+    else:
+        _cands = {0, n - 1}
+        for k in range(1, n - 1):
+            a, b, c = ys[k - 1], ys[k], ys[k + 1]
+            if (b > a and b > c) or (b < a and b < c):
+                _cands.add(k)
+        _promo = {}
+        for k in _cands:
+            if k in (0, n - 1):
+                _promo[k] = float("inf")
+            else:
+                _promo[k] = min(abs(ys[k] - ys[k - 1]), abs(ys[k] - ys[k + 1]))
+        _keep, _xs = set(), {}
+        for k in sorted(_cands, key=lambda i: -_promo[i]):
+            _x = 40 + k * (w - 80) / (n - 1)
+            if all(abs(_x - _xs[j]) >= 58 for j in _keep):
+                _keep.add(k)
+                _xs[k] = _x
+        _cands = _keep
+    for k, (x, y, e, v) in enumerate(pts):
+        if k not in _cands:
+            continue
         lab = fmt(v) if fmt else _pct(v)
         va = "bottom" if y > h * 0.5 else "top"
         dy = -7 if va == "bottom" else 12
