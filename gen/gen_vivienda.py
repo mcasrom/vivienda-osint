@@ -785,7 +785,7 @@ def _ccaa_page(nom, d, all_d):
             f'<thead><tr><th>Indicador</th><th class="num">Valor</th><th>Periodo</th><th>Fuente</th></tr></thead>'
             f'<tbody>{filas}</tbody></table>'
             f'<p class="mut" style="font-size:.78rem;margin:10px 0 0">Datos oficiales. Las tasas usan como denominador '
-            f'el total de viviendas (derivado del % VUT del INE). Ver <a href="/metodo.html">método</a> y '
+            f'el total de viviendas (derivado del % VUT del INE). Ver <a href="/#metodo">método</a> y '
             f'<a href="/">panel general</a>.</p></div>'
             f'<h2>Suplemento gráfico <span>· {E(nom)} frente a las CCAA</span></h2><div class="panel">'
             f'{_perfil_svg(nom, d, all_d)}'
