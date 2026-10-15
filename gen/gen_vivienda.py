@@ -285,7 +285,7 @@ def _shell(titulo, desc, canonical, h1, intro, body, active=""):
 {nav}
 <header class="hero"><div class="wrap"><h1>{h1}</h1><p>{intro}</p></div></header>
 <main>{body}</main>
-<footer>Observatorio de la vivienda · <a href="https://pruebapublica.com">pruebapublica.com</a> · datos de fuentes públicas · <a href="/fuentes.html">Fuentes y auditoría</a> · <a href="https://github.com/mcasrom/vivienda-osint" target="_blank" rel="noopener">código abierto</a> · v{VERSION}</footer>
+<footer>Observatorio de la vivienda · <a href="https://pruebapublica.com">pruebapublica.com</a> · <a href="https://analisis.pruebapublica.com/">Análisis geopolítico</a> · datos de fuentes públicas · <a href="/fuentes.html">Fuentes y auditoría</a> · <a href="https://github.com/mcasrom/vivienda-osint" target="_blank" rel="noopener">código abierto</a> · v{VERSION}</footer>
 </body></html>"""
 
 
