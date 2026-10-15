@@ -285,7 +285,7 @@ def _shell(titulo, desc, canonical, h1, intro, body, active=""):
 {nav}
 <header class="hero"><div class="wrap"><h1>{h1}</h1><p>{intro}</p></div></header>
 <main>{body}</main>
-<footer>Observatorio de la vivienda · <a href="https://pruebapublica.com">pruebapublica.com</a> · <a href="https://analisis.pruebapublica.com/">Análisis geopolítico</a> · datos de fuentes públicas · <a href="/fuentes.html">Fuentes y auditoría</a> · <a href="https://github.com/mcasrom/vivienda-osint" target="_blank" rel="noopener">código abierto</a> · v{VERSION}</footer>
+<footer>Observatorio de la vivienda · <a href="https://pruebapublica.com">pruebapublica.com</a> · datos de fuentes públicas · <a href="/fuentes.html">Fuentes y auditoría</a> · <a href="https://github.com/mcasrom/vivienda-osint" target="_blank" rel="noopener">código abierto</a> · v{VERSION}</footer>
 </body></html>"""
 
 
@@ -1823,7 +1823,7 @@ footer{{max-width:1060px;margin:0 auto;padding:24px 20px 50px;font-size:.8rem;co
   <a href="https://ko-fi.com/m_castillo" target="_blank" rel="noopener" style="background:var(--accent);color:#fff;font-weight:700;padding:13px 24px;border-radius:10px;text-decoration:none;white-space:nowrap">☕ Apoyar en Ko-fi →</a>
 </div>
 </main>
-<footer>Observatorio de la vivienda · microservicio de <a href="https://pruebapublica.com">pruebapublica.com</a> · datos solo de fuentes <b>públicas</b> (INE/CGPJ/BOE).<br>No analiza redes ni coordinación: solo hechos oficiales y su evolución · <a href="https://github.com/mcasrom/vivienda-osint" target="_blank" rel="noopener">código abierto</a> · v{VERSION}</footer>
+<footer>Observatorio de la vivienda · microservicio de <a href="https://pruebapublica.com">pruebapublica.com</a> · <a href="https://analisis.pruebapublica.com/">Análisis geopolítico</a> · datos solo de fuentes <b>públicas</b> (INE/CGPJ/BOE).<br>No analiza redes ni coordinación: solo hechos oficiales y su evolución · <a href="https://github.com/mcasrom/vivienda-osint" target="_blank" rel="noopener">código abierto</a> · v{VERSION}</footer>
 <script>
 var CMP={comp_json}, NAT={nat_json};
 var sel=document.getElementById('regsel');
